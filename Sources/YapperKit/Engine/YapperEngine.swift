@@ -10,13 +10,17 @@ public enum YapperError: Error, Equatable {
     case voicesNotFound(path: String)
     case invalidModelFile(path: String, message: String)
     case invalidVoicesFile(path: String, message: String)
+    case audioError(message: String)
+    case synthesisError(message: String)
 }
 
 /// Core TTS engine. Loads the Kokoro-82M model and voice embeddings,
 /// then synthesises text to audio.
 public class YapperEngine {
     let weights: [String: MLXArray]
-    let voiceRegistry: VoiceRegistry
+    public let voiceRegistry: VoiceRegistry
+    private lazy var pipeline: KokoroPipeline = KokoroPipeline(weights: self.weights)
+    private let chunker: TextChunker
 
     /// Initialise the engine with paths to the model weights and voice directory.
     ///
@@ -37,9 +41,11 @@ public class YapperEngine {
             throw YapperError.voicesNotFound(path: voicesPath.path)
         }
 
-        // Load model weights
+        // Load and transform model weights
         do {
-            self.weights = try MLX.loadArrays(url: modelPath)
+            self.weights = try WeightLoader.load(from: modelPath)
+        } catch let error as YapperError {
+            throw error
         } catch {
             throw YapperError.invalidModelFile(
                 path: modelPath.path,
@@ -49,5 +55,87 @@ public class YapperEngine {
 
         // Load voice registry
         self.voiceRegistry = try VoiceRegistry(voicesPath: voicesPath)
+
+        // Initialise text chunker (pipeline is lazy — created on first synthesis)
+        self.chunker = TextChunker()
+    }
+
+    /// Synthesise text to PCM audio.
+    ///
+    /// Handles text of any length by chunking at sentence boundaries.
+    ///
+    /// - Parameters:
+    ///   - text: Input text to synthesise
+    ///   - voice: Voice to use
+    ///   - speed: Speed multiplier (1.0 = normal, 2.0 = twice as fast)
+    /// - Returns: AudioResult with PCM samples at 24kHz and word timestamps
+    public func synthesize(text: String, voice: Voice, speed: Float = 1.0) throws -> AudioResult {
+        let voiceEmbedding = try voiceRegistry.load(name: voice.name)
+        let chunks = chunker.chunk(text)
+
+        var allSamples: [Float] = []
+        var allTimestamps: [WordTimestamp] = []
+        var timeOffset: Double = 0.0
+
+        for chunk in chunks {
+            let (samples, timestamps) = try pipeline.synthesise(
+                text: chunk.text,
+                voiceEmbedding: voiceEmbedding,
+                accent: voice.accent,
+                speed: speed
+            )
+
+            allSamples.append(contentsOf: samples)
+
+            // Offset timestamps by cumulative duration of previous chunks
+            let offsetTimestamps = timestamps.map { ts in
+                WordTimestamp(
+                    word: ts.word,
+                    startTime: ts.startTime + timeOffset,
+                    endTime: ts.endTime + timeOffset
+                )
+            }
+            allTimestamps.append(contentsOf: offsetTimestamps)
+
+            timeOffset += Double(samples.count) / Double(KokoroPipeline.sampleRate)
+        }
+
+        return AudioResult(
+            samples: allSamples,
+            sampleRate: KokoroPipeline.sampleRate,
+            timestamps: allTimestamps
+        )
+    }
+
+    /// Stream synthesis with per-chunk callbacks.
+    ///
+    /// - Parameters:
+    ///   - text: Input text to synthesise
+    ///   - voice: Voice to use
+    ///   - speed: Speed multiplier
+    ///   - onChunk: Called after each chunk is synthesised
+    public func stream(
+        text: String,
+        voice: Voice,
+        speed: Float = 1.0,
+        onChunk: (AudioChunk) -> Void
+    ) throws {
+        let voiceEmbedding = try voiceRegistry.load(name: voice.name)
+        let chunks = chunker.chunk(text)
+
+        for (index, chunk) in chunks.enumerated() {
+            let (samples, timestamps) = try pipeline.synthesise(
+                text: chunk.text,
+                voiceEmbedding: voiceEmbedding,
+                accent: voice.accent,
+                speed: speed
+            )
+
+            onChunk(AudioChunk(
+                samples: samples,
+                timestamps: timestamps,
+                isLast: index == chunks.count - 1
+            ))
+        }
     }
 }

@@ -10,8 +10,6 @@ SCHEME := yapper-Package
 DESTINATION := platform=OS X
 INSTALL_DIR := $(HOME)/.local/bin
 DERIVED_DATA := $(HOME)/Library/Developer/Xcode/DerivedData
-# Find the yapper binary in Xcode's DerivedData
-YAPPER_BIN = $(shell find $(DERIVED_DATA)/yapper-*/Build/Products/Debug -name yapper -type f 2>/dev/null | head -1)
 
 build: ## Build the project
 	xcodebuild build -scheme yapper -destination '$(DESTINATION)' -quiet
@@ -24,7 +22,12 @@ lint: ## Run linter
 	fi
 
 test: lint ## Run regression tests (includes lint)
-	@xcodebuild test -scheme $(SCHEME) -destination '$(DESTINATION)' \
+	@xcodebuild build-for-testing -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet
+	@# MisakiSwift resource bundle must be copied into its framework for test discovery
+	@cp -R $(DERIVED_DATA)/yapper-*/Build/Products/Debug/MisakiSwift_MisakiSwift.bundle \
+		$(DERIVED_DATA)/yapper-*/Build/Products/Debug/PackageFrameworks/MisakiSwift.framework/Versions/A/Resources/ \
+		2>/dev/null || true
+	@xcodebuild test-without-building -scheme $(SCHEME) -destination '$(DESTINATION)' \
 		-only-testing:YapperKitTests 2>&1 | \
 		grep -v "^objc\[" | \
 		grep -v "duplicates must be" | \

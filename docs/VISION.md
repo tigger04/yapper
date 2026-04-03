@@ -119,7 +119,8 @@ Key requirements for this use case:
 
 ### Future considerations
 
-- GUI wrapper (macOS native)
+- iOS support — YapperKit is portable to iOS 18+ (all dependencies support it). The CLI is macOS-only but the library layer has no macOS-specific APIs.
+- GUI wrapper (macOS native, and potentially iOS/iPadOS)
 - Voice cloning / custom voice training
 - Pronunciation customisation (lexicon overrides)
 - Multiple language support (Kokoro supports EN, JA, ZH, DE, FR, and others)
