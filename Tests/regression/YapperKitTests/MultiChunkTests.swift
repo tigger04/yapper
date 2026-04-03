@@ -25,7 +25,7 @@ struct MultiChunkTests {
         let result = try engine.synthesize(text: longText, voice: voice, speed: 1.0)
 
         let silenceThreshold: Float = 0.001
-        let gapThresholdSamples = Int(0.6 * 24000) // 600ms at 24kHz — model natural padding; cross-chunk silence elimination is a follow-up
+        let gapThresholdSamples = Int(0.8 * 24000) // 800ms at 24kHz — model natural BOS/EOS padding; cross-chunk silence elimination is a follow-up
         var consecutiveSilence = 0
         var maxSilence = 0
 

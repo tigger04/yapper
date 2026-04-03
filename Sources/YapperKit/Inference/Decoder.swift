@@ -17,7 +17,7 @@ import MLXRandom
 /// Input: [batch, channels, seqLen] (channels-first)
 /// Output: [batch, outChannels, seqLen'] (channels-first)
 func applyConvTransposed(_ x: MLXArray, conv: ConvWeighted) -> MLXArray {
-    let vNorm = MLXLinalg.norm(conv.weightV, axes: [1, 2], keepDims: true)
+    let vNorm = MLXLinalg.norm(conv.weightV, axes: [1, 2], keepDims: true) + 1e-7
     var w = (conv.weightV / vNorm) * conv.weightG
     // After WeightLoader sanitisation, regular weights are [inCh, kernel, outCh]
     // MLX needs [outCh, kernel, inCh] = transposed(2, 1, 0)

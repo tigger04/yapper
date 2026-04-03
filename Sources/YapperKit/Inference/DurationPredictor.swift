@@ -161,6 +161,7 @@ class DurationPredictor {
 
         // Sigmoid -> sum over last dim -> divide by speed -> round -> clamp to >= 1
         let durFloat = MLX.sigmoid(logits).sum(axis: -1) / speed
-        return MLX.clip(durFloat.round(), min: 1).asType(.int32)[0]
+        let durations = MLX.clip(durFloat.round(), min: 1).asType(.int32)[0]
+        return durations
     }
 }

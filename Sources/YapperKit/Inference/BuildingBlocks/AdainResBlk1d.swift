@@ -8,8 +8,12 @@ import MLXNN
 ///
 /// Forward: (residual(x, style) + shortcut(x)) / sqrt(2)
 ///
-/// Residual path: norm1 -> LeakyReLU(0.2) -> [upsample] -> conv1 -> norm2 -> LeakyReLU(0.2) -> conv2
-/// Shortcut path: [upsample] -> [conv1x1 if channel dims differ], else identity
+/// Residual path: norm1 -> LeakyReLU(0.2) -> [transposed conv upsample + pad] -> conv1 -> norm2 -> LeakyReLU(0.2) -> conv2
+/// Shortcut path: [nearest-neighbour 2x upsample] -> [conv1x1 if channel dims differ], else identity
+///
+/// NOTE: The shortcut uses nearest-neighbour upsampling, NOT transposed convolution.
+/// The residual path uses transposed conv + padding for upsampling.
+/// This matches KokoroSwift's implementation.
 class AdainResBlk1d {
     let conv1: ConvWeighted
     let conv2: ConvWeighted
@@ -17,14 +21,8 @@ class AdainResBlk1d {
     let norm2: AdaIN1d
     let pool: ConvTransposedWeighted?
     let conv1x1: ConvWeighted?
+    let hasUpsample: Bool
 
-    /// - Parameters:
-    ///   - conv1: first convolution in the residual path
-    ///   - conv2: second convolution in the residual path
-    ///   - norm1: first AdaIN layer
-    ///   - norm2: second AdaIN layer
-    ///   - pool: optional transposed convolution for upsampling (nil if no upsampling)
-    ///   - conv1x1: optional 1x1 convolution for channel projection on the shortcut (nil if channels match)
     init(
         conv1: ConvWeighted,
         conv2: ConvWeighted,
@@ -39,6 +37,7 @@ class AdainResBlk1d {
         self.norm2 = norm2
         self.pool = pool
         self.conv1x1 = conv1x1
+        self.hasUpsample = pool != nil
     }
 
     /// - Parameters:
@@ -57,7 +56,14 @@ class AdainResBlk1d {
         h = leakyRelu(h, negativeSlope: 0.2)
 
         if let pool {
+            // Transposed conv upsample in residual path
             h = pool(h)
+            // Pad time dimension by 1 at the start (channels-first: axis 2)
+            h = MLX.padded(h, widths: [
+                IntOrPair([0, 0]),  // batch
+                IntOrPair([0, 0]),  // channels
+                IntOrPair([1, 0])   // time: pad 1 at start
+            ])
         }
 
         h = conv1(h)
@@ -71,8 +77,12 @@ class AdainResBlk1d {
     private func shortcutPath(_ x: MLXArray) -> MLXArray {
         var h = x
 
-        if let pool {
-            h = pool(h)
+        if hasUpsample {
+            // Shortcut uses nearest-neighbour 2x upsample, NOT transposed conv.
+            // Transpose to channels-last for MLXNN Upsample, then back.
+            h = h.transposed(0, 2, 1)  // [batch, seqLen, channels]
+            h = Upsample(scaleFactor: 2.0, mode: .nearest)(h)
+            h = h.transposed(0, 2, 1)  // [batch, channels, seqLen*2]
         }
 
         if let conv1x1 {

@@ -40,8 +40,9 @@ class ConvWeighted {
     ///
     /// weightV shape: [outChannels, kernelSize, inChannels]
     /// weightG shape: [outChannels, 1, 1]
+    /// Epsilon added for numerical stability (matches KokoroSwift).
     private func normalisedWeight() -> MLXArray {
-        let vNorm = MLXLinalg.norm(weightV, axes: [1, 2], keepDims: true)
+        let vNorm = MLXLinalg.norm(weightV, axes: [1, 2], keepDims: true) + 1e-7
         return (weightV / vNorm) * weightG
     }
 
@@ -50,7 +51,7 @@ class ConvWeighted {
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         let w = normalisedWeight()
         // Transpose to channels-last for MLX conv1d
-        let xCL = x.transposed(0, 2, 1)  // [batch, seqLen, channels]
+        let xCL = x.transposed(0, 2, 1)  // [batch, seqLen, inChannels]
         var y = conv1d(xCL, w, stride: stride, padding: padding, dilation: dilation, groups: groups)
         if let bias {
             y = y + bias
@@ -91,7 +92,7 @@ class ConvTransposedWeighted {
     }
 
     private func normalisedWeight() -> MLXArray {
-        let vNorm = MLXLinalg.norm(weightV, axes: [1, 2], keepDims: true)
+        let vNorm = MLXLinalg.norm(weightV, axes: [1, 2], keepDims: true) + 1e-7
         return (weightV / vNorm) * weightG
     }
 
