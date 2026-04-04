@@ -1,0 +1,14 @@
+{
+  "release_tag": "models-v1",
+  "model": {
+    "filename": "kokoro-v1_0.safetensors",
+    "url": "https://github.com/tigger04/yapper/releases/download/models-v1/kokoro-v1_0.safetensors",
+    "sha256": "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8"
+  },
+  "voices": {
+    "filename": "voices.tar.gz",
+    "url": "https://github.com/tigger04/yapper/releases/download/models-v1/voices.tar.gz",
+    "sha256": "bf273cf082639010bc5e94a5ff19f62c69aa4ded7a0651dc8a3c6d19e855b459",
+    "count": 28
+  }
+}
