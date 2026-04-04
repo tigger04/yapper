@@ -12,6 +12,9 @@ Yapper synthesizes natural-sounding speech from text, running entirely on-device
 # Speak text aloud
 yapper speak "Hello, this is yapper."
 
+# Custom pronunciation for names the G2P gets wrong
+yapper speak "Hello [Taḋg](/taɪɡ/), how are you today?"
+
 # List available voices
 yapper voices
 
