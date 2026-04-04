@@ -4,7 +4,7 @@
 # xcodebuild is required (not swift build) because MLX Swift needs
 # Metal shader compilation, which only Xcode's build system supports.
 
-.PHONY: build test test-framework test-cli test-one-off lint install uninstall clean help
+.PHONY: build test test-framework test-cli test-one-off lint install uninstall clean help release release-models
 
 SCHEME := yapper-Package
 DESTINATION := platform=OS X
@@ -92,6 +92,12 @@ uninstall: ## Remove yapper from ~/.local/bin
 clean: ## Remove build artefacts
 	swift package clean
 	@xcodebuild clean -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet 2>/dev/null || true
+
+release-models: ## Package and upload model weights + English voices to models-v1 release
+	@bash scripts/release-models.sh
+
+release: ## Bump version, tag, push, update Homebrew formula (usage: make release [VERSION])
+	@bash scripts/release.sh $(VERSION)
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
