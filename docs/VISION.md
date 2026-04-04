@@ -1,6 +1,6 @@
 <!-- Version: 0.2 | Last updated: 2026-04-02 -->
 
-# Yapper — Vision
+# Yapper - Vision
 
 ## What
 
@@ -26,7 +26,7 @@ A fast, Apple Silicon-native TTS toolkit. CLI-first, embeddable as a Swift libra
 YapperKit implements its own Kokoro inference pipeline on top of MLX Swift, using MisakiSwift for grapheme-to-phoneme conversion. KokoroSwift serves as a reference implementation for understanding the model architecture but is not a runtime dependency.
 
 **Why not depend on KokoroSwift directly?**
-- Its `generateAudio` is synchronous with no streaming support — we need sentence-level chunked output for live playback
+- Its `generateAudio` is synchronous with no streaming support - we need sentence-level chunked output for live playback
 - Owning the inference layer lets us control chunking, audio pipeline, and future optimisations without maintaining a fork
 - The model architecture (StyleTTS2-based, 82M params, non-autoregressive) is well-understood and bounded to implement with KokoroSwift as a reference
 
@@ -35,20 +35,20 @@ YapperKit implements its own Kokoro inference pipeline on top of MLX Swift, usin
 - MisakiSwift is well-maintained, cleanly isolated, and Apache 2.0 licensed
 - No benefit to reimplementing it
 
-No runtime dependency on upstream model repos — weights are standalone files.
+No runtime dependency on upstream model repos - weights are standalone files.
 
 ## Architecture
 
 Yapper is structured as two layers:
 
-1. **YapperKit** — Swift library/package. Handles model loading, inference, streaming audio output, voice management. Embeddable in other Swift projects.
-2. **yapper** — CLI tool built on YapperKit. Handles document conversion, chapter detection, file I/O, and audiobook assembly.
+1. **YapperKit** - Swift library/package. Handles model loading, inference, streaming audio output, voice management. Embeddable in other Swift projects.
+2. **yapper** - CLI tool built on YapperKit. Handles document conversion, chapter detection, file I/O, and audiobook assembly.
 
 ```
 ┌─────────────────────────────────────┐
 │           CLI (yapper)              │
-│  epub/pdf/docx/odt → chapters →    │
-│  TTS → mp3/m4b output              │
+│  epub/pdf/docx/odt -> chapters ->    │
+│  TTS -> mp3/m4b output              │
 ├─────────────────────────────────────┤
 │          YapperKit                  │
 │  Model loading · Inference ·        │
@@ -61,7 +61,7 @@ Yapper is structured as two layers:
 
 ## Use Cases
 
-### Phase 1 — MVP (CLI)
+### Phase 1 - MVP (CLI)
 
 #### UC1: Document to audiobook
 
@@ -71,7 +71,7 @@ Convert a document to an audiobook file.
 - **Output formats:** `.mp3`, `.m4b` (with chapter markers)
 - **Conversion pipeline:** epub/mobi via native parsing or Calibre; pdf via `pdftotext` (or ocr as fallback TODO identify fallback OCR tool); docx/odt via `pandoc`; txt/md/html direct or via pandoc
 - **Chapter detection:** Extract chapter structure from epub TOC; infer from headings for other formats
-- **Voice per chapter:** Randomise voice assignment per chapter by default; allow explicit voice selection via flag
+- **Voice per chapter:** Randomize voice assignment per chapter by default; allow explicit voice selection via flag
 - **Metadata:** Embed title, author, chapter markers (m4b), cover art where available
 - **ID3 tags:** Artist, album, track number
 
@@ -81,9 +81,9 @@ Quick single-file conversion: `yapper convert notes.txt -o notes.mp3`
 
 #### UC3: Live TTS playback
 
-Synthesise and play text directly without writing an intermediate file: `yapper speak "Hello world"` or `echo "some text" | yapper speak`
+Synthesize and play text directly without writing an intermediate file: `yapper speak "Hello world"` or `echo "some text" | yapper speak`
 
-This streams audio to the system output device in real time via YapperKit's streaming inference — no temp files.
+This streams audio to the system output device in real time via YapperKit's streaming inference - no temp files.
 
 #### UC4: Stdin streaming
 
@@ -94,7 +94,7 @@ cat document.txt | yapper speak
 cat document.txt | yapper convert -o output.mp3
 ```
 
-### Phase 2 — Extended CLI
+### Phase 2 - Extended CLI
 
 #### UC5: Clipboard reader
 
@@ -104,11 +104,11 @@ Read aloud the current clipboard contents: `yapper speak --clipboard`
 
 Read aloud a selection of text from the screen (via macOS Accessibility APIs or similar): `yapper speak --selection`
 
-### Phase 3 — Embeddable library
+### Phase 3 - Embeddable library
 
 #### UC7: Epub reader integration
 
-YapperKit is embeddable as a Swift Package dependency. A separate epub reader project can import YapperKit to provide read-aloud functionality — synthesising speech on the fly as the user reads, chapter by chapter or paragraph by paragraph, without pre-generating an entire audiobook.
+YapperKit is embeddable as a Swift Package dependency. A separate epub reader project can import YapperKit to provide read-aloud functionality - synthesizing speech on the fly as the user reads, chapter by chapter or paragraph by paragraph, without pre-generating an entire audiobook.
 
 Key requirements for this use case:
 - Low-latency first-audio (sub-second target)
@@ -119,10 +119,10 @@ Key requirements for this use case:
 
 ### Future considerations
 
-- iOS support — YapperKit is portable to iOS 18+ (all dependencies support it). The CLI is macOS-only but the library layer has no macOS-specific APIs.
+- iOS support - YapperKit is portable to iOS 18+ (all dependencies support it). The CLI is macOS-only but the library layer has no macOS-specific APIs.
 - GUI wrapper (macOS native, and potentially iOS/iPadOS)
 - Voice cloning / custom voice training
-- Pronunciation customisation (lexicon overrides)
+- Pronunciation customization (lexicon overrides)
 - Multiple language support (Kokoro supports EN, JA, ZH, DE, FR, and others)
 - Batch/queue processing
 - Opus output format
@@ -161,10 +161,10 @@ Default voice: `af_heart`. Random voice assignment picks from the full set (or a
 
 ### Runtime (CLI)
 - macOS 14+ (Sonoma) with Apple Silicon
-- `pandoc` — document format conversion (docx, odt, md, html)
-- `pdftotext` (poppler) — PDF text extraction
-- `calibre` (`ebook-convert`) — mobi conversion (optional, only for .mobi input)
-- `ffmpeg` — audio encoding and m4b assembly
+- `pandoc` - document format conversion (docx, odt, md, html)
+- `pdftotext` (poppler) - PDF text extraction
+- `calibre` (`ebook-convert`) - mobi conversion (optional, only for .mobi input)
+- `ffmpeg` - audio encoding and m4b assembly
 
 ### No runtime dependency on
 - Python
@@ -173,7 +173,7 @@ Default voice: `af_heart`. Random voice assignment picks from the full set (or a
 
 ## Licence
 
-Apache 2.0 — Copyright Taḋg Paul
+Apache 2.0 - Copyright Taḋg Paul
 
 ---
 
