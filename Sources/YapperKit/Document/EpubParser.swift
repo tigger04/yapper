@@ -3,23 +3,23 @@
 
 import Foundation
 
-/// A chapter extracted from an epub.
-struct Chapter {
-    let title: String
-    let text: String
+/// A chapter extracted from a document.
+public struct Chapter {
+    public let title: String
+    public let text: String
 }
 
 /// Metadata extracted from an epub.
-struct EpubMetadata {
-    let title: String?
-    let author: String?
-    let coverImagePath: String?
+public struct EpubMetadata {
+    public let title: String?
+    public let author: String?
+    public let coverImagePath: String?
 }
 
 /// Result of parsing an epub file.
-struct EpubParseResult {
-    let chapters: [Chapter]
-    let metadata: EpubMetadata
+public struct EpubParseResult {
+    public let chapters: [Chapter]
+    public let metadata: EpubMetadata
 }
 
 /// Parses epub files to extract chapter structure, text content, and metadata.
