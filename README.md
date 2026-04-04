@@ -147,4 +147,4 @@ docs/                   # VISION, architecture, implementation plan
 
 ## Licence
 
-MIT — Copyright Taḋg Paul
+Apache 2.0 — Copyright Taḋg Paul. See [LICENSE](LICENSE).

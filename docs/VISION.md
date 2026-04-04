@@ -173,7 +173,7 @@ Default voice: `af_heart`. Random voice assignment picks from the full set (or a
 
 ## Licence
 
-MIT — Copyright Taḋg Paul
+Apache 2.0 — Copyright Taḋg Paul
 
 ---
 
