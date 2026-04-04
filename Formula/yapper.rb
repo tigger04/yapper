@@ -20,11 +20,19 @@ class Yapper < Formula
   end
 
   def install
+    # Pre-resolve Swift package dependencies with Swift's sandbox disabled,
+    # so the resolver can run inside Homebrew's outer sandbox. Without this,
+    # xcodebuild's internal package resolver triggers
+    #   sandbox-exec: sandbox_apply: Operation not permitted
+    system "swift", "package", "resolve", "--disable-sandbox"
+
     system "xcodebuild", "build",
            "-scheme", "yapper",
            "-destination", "platform=OS X",
            "-configuration", "Release",
-           "-derivedDataPath", buildpath/".xcode"
+           "-derivedDataPath", buildpath/".xcode",
+           "-skipPackagePluginValidation",
+           "-disableAutomaticPackageResolution"
 
     built = Dir["#{buildpath}/.xcode/Build/Products/Release/yapper"].first
     odie "yapper binary not found after build" unless built
