@@ -128,7 +128,18 @@ CLI can produce a complete audiobook from a document.
 - Package README with usage examples
 - Versioned release (1.0)
 
-### Issue 13 — Resumable audiobook generation
+### Issue 13 — Multi-language voice support
+
+- Update `Voice` parser to recognise all language prefixes (e/f/h/i/j/p/z)
+- Add `Accent` cases or a `Language` enum for non-English voices
+- Update `VoiceRegistry` to list all 54 voices
+- Update MisakiSwift usage to support language-specific G2P (MisakiSwift currently English-only)
+- Investigate whether Kokoro-82M handles multilingual G2P or if separate G2P modules are needed per language
+- `yapper voices` shows language column
+- `--voice` and `--random-voice` filter by language
+- `yapper speak` auto-detects language from voice prefix or accepts `--lang` flag
+
+### Issue 14 — Resumable audiobook generation
 
 - Save synthesis state after each chapter (which chapters are done, output files so far)
 - `yapper convert --resume` picks up where a failed/interrupted generation left off
