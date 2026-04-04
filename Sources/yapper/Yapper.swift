@@ -10,6 +10,6 @@ struct YapperCLI: ParsableCommand {
         commandName: "yapper",
         abstract: "Fast, Apple Silicon-native text-to-speech toolkit.",
         version: YapperKit.version,
-        subcommands: []
+        subcommands: [SpeakCommand.self, VoicesCommand.self]
     )
 }

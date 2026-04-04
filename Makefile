@@ -13,6 +13,10 @@ DERIVED_DATA := $(HOME)/Library/Developer/Xcode/DerivedData
 
 build: ## Build the project
 	xcodebuild build -scheme yapper -destination '$(DESTINATION)' -quiet
+	@# Copy MisakiSwift resource bundle into its framework (needed for CLI and tests)
+	@cp -R $(DERIVED_DATA)/yapper-*/Build/Products/Debug/MisakiSwift_MisakiSwift.bundle \
+		$(DERIVED_DATA)/yapper-*/Build/Products/Debug/PackageFrameworks/MisakiSwift.framework/Versions/A/Resources/ \
+		2>/dev/null || true
 
 lint: ## Run linter
 	@if command -v swiftlint >/dev/null 2>&1; then \
@@ -35,15 +39,15 @@ test: lint ## Run regression tests (includes lint)
 		grep -v "^$$"
 
 install: build ## Install yapper to ~/.local/bin
-	@mkdir -p "$(INSTALL_DIR)"
-	$(eval BIN := $(shell find $(DERIVED_DATA)/yapper-*/Build/Products/Debug -name yapper -type f 2>/dev/null | head -1))
-	@if [ -n "$(BIN)" ] && [ -f "$(BIN)" ]; then \
-		ln -sf "$(BIN)" "$(INSTALL_DIR)/yapper"; \
-		echo "Installed yapper to $(INSTALL_DIR)/yapper"; \
-	else \
+	$(eval PRODDIR := $(shell find $(DERIVED_DATA)/yapper-*/Build/Products/Debug -name yapper -type f 2>/dev/null | head -1 | xargs dirname))
+	@if [ -z "$(PRODDIR)" ]; then \
 		echo "Error: could not find yapper binary. Run 'make build' first."; \
 		exit 1; \
 	fi
+	@mkdir -p "$(INSTALL_DIR)"
+	@printf '#!/usr/bin/env bash\ncd "%s" && exec ./yapper "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
+	@chmod +x "$(INSTALL_DIR)/yapper"
+	@echo "Installed yapper to $(INSTALL_DIR)/yapper"
 
 uninstall: ## Remove yapper from ~/.local/bin
 	@rm -f "$(INSTALL_DIR)/yapper"

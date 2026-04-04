@@ -1,4 +1,4 @@
-<!-- Version: 0.2 | Last updated: 2026-04-02 -->
+<!-- Version: 0.3 | Last updated: 2026-04-03 -->
 
 # Yapper — Architecture
 
@@ -27,9 +27,9 @@ Yapper is a two-layer Swift system: **YapperKit** (library) and **yapper** (CLI)
 │   510-token cap)                       PCM buffer   │
 │                                        for files)   │
 │                                                   │
-│  Timestamps        Voice Registry                  │
-│  (word-level,       (enumerate,                    │
-│   from inference)    load, filter)                 │
+│  Timestamps        Voice Registry    Mel Spectrogram│
+│  (word-level,       (enumerate,       (quality      │
+│   from inference)    load, filter)     comparison)  │
 ├──────────────────────────────────────────────────┤
 │  MisakiSwift (G2P) + MLX Swift (Metal inference)  │
 └──────────────────────────────────────────────────┘
@@ -47,48 +47,46 @@ We evaluated three approaches:
 
 **MisakiSwift for G2P:** Grapheme-to-phoneme is the most complex component — lexicon dictionaries, a BART fallback neural network for out-of-vocabulary words, NLP POS tagging via Apple's NaturalLanguage framework. MisakiSwift is well-maintained, cleanly isolated, and Apache 2.0. No reason to reimplement.
 
-**Own inference layer:** KokoroSwift's `generateAudio` is synchronous — it runs the full pipeline (G2P → BERT → duration prediction → prosody → decoder → iSTFT) and returns all PCM samples at once. There is no callback, no async/await, and no way to get partial results. Adding sentence-level chunked playback (our core streaming requirement) would mean forking KokoroSwift and maintaining the fork indefinitely. Writing our own inference code on MLX Swift, using KokoroSwift as a reference, gives us full control from the start.
+**Own inference layer:** KokoroSwift's `generateAudio` is synchronous — it runs the full pipeline and returns all PCM samples at once. There is no callback, no async/await, and no way to get partial results. Writing our own inference code on MLX Swift, using KokoroSwift as a reference, gives us full control over chunking and streaming from the start.
 
 **What we're not gaining:** There is no meaningful performance difference between using KokoroSwift and our own inference — both hit the same MLX Swift → Metal backend. The motivation is architectural control, not speed.
 
+**Validation:** After implementation, intermediate tensor comparison confirms our pipeline produces output numerically identical to KokoroSwift at every stage (BERT, duration, prosody, final audio).
+
 ## Model constraints
 
-These are properties of the Kokoro-82M model itself, not implementation choices. They apply regardless of which inference code runs the model.
+These are properties of the Kokoro-82M model itself, not implementation choices.
 
 ### 510-token limit
 
-The model uses a BERT text encoder with a fixed positional embedding table of 512 positions (2 reserved for special tokens → 510 usable). Input beyond 510 phoneme tokens has no positional encoding and produces garbage. All Kokoro implementations (Python, Rust, Swift) enforce this limit.
-
-In practice, 510 phoneme tokens ≈ 2–4 sentences of English. Any text longer than this must be chunked externally.
+The model uses a BERT text encoder with a fixed positional embedding table of 512 positions (2 reserved for special tokens → 510 usable). Input beyond 510 phoneme tokens produces garbage. In practice, 510 phoneme tokens ≈ 2–4 sentences of English. Any text longer than this must be chunked externally.
 
 ### Non-autoregressive generation
 
-Kokoro predicts all audio frames in a single forward pass — it is not autoregressive. The pipeline is:
+Kokoro predicts all audio frames in a single forward pass. The pipeline is:
 
 ```
 text → G2P → phonemes → BERT encoding → duration prediction →
 prosody prediction → decoder → full spectrogram → iSTFT → all PCM samples
 ```
 
-There is no natural streaming point mid-inference. Each inference call produces the complete waveform for its input. This is what makes Kokoro fast (single pass, no sequential token dependency) but means true token-level streaming is not possible.
+There is no natural streaming point mid-inference. Each call produces the complete waveform for its input.
 
 ### Pseudo-streaming strategy
 
-To achieve perceived real-time playback despite non-autoregressive generation:
+To achieve perceived real-time playback:
 
 1. Split input text at sentence boundaries (using `NLTokenizer` with `.sentence` unit)
 2. Greedily batch consecutive sentences into chunks that fit within the 510-token budget
 3. For live playback: generate each chunk, push PCM to `AVAudioEngine` immediately, start generating the next chunk while the current one plays
 4. For file output: generate all chunks sequentially, concatenate PCM buffers
 
-On M3/M4 hardware, inference for a single sentence-length chunk is expected to be well under 1 second. The user hears the first sentence while subsequent sentences are still being synthesised.
-
 ## YapperKit
 
 ### Responsibilities
 
 - Load Kokoro-82M model weights (`.safetensors`) via MLX Swift
-- Load voice embeddings (`.npz`) via MLX utilities
+- Load voice embeddings from individual `.safetensors` files (v1.0 format)
 - Run inference: text → MisakiSwift G2P → BERT encoding → duration/prosody prediction → decoder → iSTFT → PCM
 - Chunk long text into ≤510-token segments at sentence boundaries
 - Manage voice selection (enumerate, load, filter by accent/gender)
@@ -105,27 +103,37 @@ Input text
 MisakiSwift G2P ──→ phoneme string + word tokens
     │
     ▼
-BERT text encoder ──→ hidden states (from model weights)
+Tokeniser ──→ phoneme token IDs (vocab lookup)
     │
     ▼
-Duration predictor ──→ per-phoneme durations
+BERT (ALBERT with weight sharing, 12 layers) ──→ hidden states [batch, seq, 768]
     │
     ▼
-Prosody predictor ──→ pitch/energy contours
+BERT Projection (Linear 768→512) ──→ [batch, 512, seq]
     │
     ▼
-Decoder ──→ mel spectrogram
+Duration Encoder (3× BiLSTM + AdaLayerNorm) ──→ [batch, seq, 640]
     │
     ▼
-iSTFT ──→ raw PCM waveform ([Float], 24kHz)
+Duration Predictor (BiLSTM + sigmoid projection) ──→ per-phoneme durations
     │
     ▼
-Word timestamps (derived from predicted durations)
+Alignment matrix (one-hot) ──→ [batch, seq, totalFrames]
+    │
+    ▼
+Prosody Predictor (shared BiLSTM → F0/N branches with AdainResBlk1d) ──→ F0, N curves
+    │
+    ▼
+Text Encoder (Embedding + CNN + BiLSTM) ──→ ASR features
+    │
+    ▼
+Decoder (AdainResBlk1d blocks + HiFi-GAN Generator + iSTFT) ──→ PCM audio
+    │
+    ▼
+Word timestamps (from predicted durations, divisor 80.0)
 ```
 
-Each stage is implemented using MLX Swift array operations and MLXNN layers, with weights loaded from the Kokoro-82M safetensors file. KokoroSwift's source code serves as the authoritative reference for how to wire these layers together.
-
-### Key types (draft)
+### Key types
 
 ```swift
 // Core engine
@@ -163,15 +171,16 @@ public struct Voice {
 
 public class VoiceRegistry {
     public func list(filter: VoiceFilter?) -> [Voice]
-    public func random(filter: VoiceFilter?) -> Voice
-    public func load(name: String) throws -> MLXArray  // voice embedding
+    public func random(filter: VoiceFilter?, seed: UInt64) -> Voice?
+    public func load(name: String) throws -> MLXArray
 }
 
 // Live playback
 public class AudioPlayer {
-    public func play(engine: YapperEngine, text: String, voice: Voice, speed: Float) throws
+    public func scheduleBuffer(_ samples: [Float]) throws
+    public func play() throws
     public func pause()
-    public func resume()
+    public func resume() throws
     public func stop()
 }
 ```
@@ -181,12 +190,18 @@ public class AudioPlayer {
 ```
 ~/.local/share/yapper/
 ├── models/
-│   └── kokoro-v1.0.safetensors     # MLX-format model weights
+│   ├── kokoro-v1_0.safetensors     # MLX bf16 model weights (327MB)
+│   └── config.json                  # Model configuration
 └── voices/
-    └── voices-v1.0.npz             # all voice embeddings
+    ├── af_heart.safetensors          # Individual voice embeddings (~522KB each)
+    ├── af_bella.safetensors
+    ├── am_adam.safetensors
+    ├── bf_emma.safetensors
+    ├── bm_daniel.safetensors
+    └── ...                           # 28 voices available in Kokoro v1.0
 ```
 
-On first run, the CLI checks for these files and provides instructions if missing. Weights are not auto-downloaded — the user copies them from HuggingFace (or we provide a `yapper setup` command).
+Voice embeddings are individual `.safetensors` files (v1.0 format), shape `[510, 1, 256]`. This differs from the older bundled `.npz` format used by KokoroSwift's test app.
 
 ## CLI (yapper)
 
@@ -230,36 +245,6 @@ Input file
          └── .m4b → ffmpeg encodes AAC, concatenates, applies chapter metadata
 ```
 
-### Chapter detection
-
-| Format | Strategy |
-|---|---|
-| `.epub` | Parse OPF spine + TOC (NCX or nav). Each spine item with a TOC entry = chapter. |
-| `.pdf` | Heading heuristics: lines in ALL CAPS, or lines matching `Chapter \d+`, or short lines followed by blank lines. Fallback: treat entire document as one chapter. |
-| `.docx`/`.odt` | Pandoc outputs markdown with `#` headings. Split on `# ` lines. |
-| `.md`/`.html` | Split on `# ` (h1) headings. |
-| `.txt` | Heading heuristics similar to PDF. Fallback: single chapter. |
-
-### Voice assignment
-
-- **Default:** random voice per chapter from the full voice set
-- **`--voice NAME`:** same voice for all chapters
-- **`--random-voice`:** random from full set (explicit, same as default)
-- **`--random-voice=FILTER`:** random from filtered set (e.g. `bf` for British female)
-- Seed is derived from the input filename for reproducibility — same file always gets the same voice assignment unless `--voice` overrides
-
-### Live playback path (`yapper speak`)
-
-```
-Text input (arg, stdin, --clipboard, --selection)
-    │
-    ▼
-YapperKit.stream() with AVAudioEngine callback
-    │
-    ▼
-System audio output (no intermediate files)
-```
-
 ### External tool dependencies
 
 | Tool | Used for | Required? |
@@ -269,7 +254,7 @@ System audio output (no intermediate files)
 | `pdftotext` | PDF → plain text | Yes (for PDF) |
 | `ebook-convert` | mobi → epub | Only for .mobi input |
 
-For live playback (`yapper speak`), no external tools are needed — audio goes directly to AVAudioEngine.
+For live playback (`yapper speak`), no external tools are needed.
 
 ## Swift Package structure
 
@@ -282,35 +267,51 @@ yapper/
 │   │   │   ├── YapperEngine.swift
 │   │   │   └── TextChunker.swift
 │   │   ├── Inference/
+│   │   │   ├── KokoroPipeline.swift
+│   │   │   ├── KokoroConfig.swift
+│   │   │   ├── WeightLoader.swift
+│   │   │   ├── MisakiG2P.swift
 │   │   │   ├── BERTEncoder.swift
 │   │   │   ├── DurationPredictor.swift
 │   │   │   ├── ProsodyPredictor.swift
+│   │   │   ├── TextEncoder.swift
 │   │   │   ├── Decoder.swift
-│   │   │   └── STFT.swift
+│   │   │   ├── STFT.swift
+│   │   │   └── BuildingBlocks/
+│   │   │       ├── LSTM.swift
+│   │   │       ├── ConvWeighted.swift
+│   │   │       ├── AdaIN1d.swift
+│   │   │       ├── AdaLayerNorm.swift
+│   │   │       ├── AdainResBlk1d.swift
+│   │   │       ├── AdaINResBlock1.swift
+│   │   │       └── LayerNormInference.swift
 │   │   ├── Voice/
 │   │   │   ├── Voice.swift
 │   │   │   └── VoiceRegistry.swift
 │   │   ├── Audio/
 │   │   │   ├── AudioResult.swift
-│   │   │   └── AudioPlayer.swift
-│   │   └── Timestamps/
-│   │       └── WordTimestamp.swift
+│   │   │   ├── AudioPlayer.swift
+│   │   │   └── MelSpectrogram.swift
+│   │   ├── Timestamps/
+│   │   │   └── WordTimestamp.swift
+│   │   └── Version.swift
 │   └── yapper/
-│       ├── main.swift
-│       ├── Commands/
-│       │   ├── ConvertCommand.swift
-│       │   ├── SpeakCommand.swift
-│       │   └── VoicesCommand.swift
-│       ├── Document/
-│       │   ├── DocumentConverter.swift
-│       │   ├── ChapterDetector.swift
-│       │   └── EpubParser.swift
-│       └── Output/
-│           ├── MP3Encoder.swift
-│           └── M4BAssembler.swift
+│       └── Yapper.swift
 ├── Tests/
 │   ├── regression/
 │   │   └── YapperKitTests/
+│   │       ├── PackageTests.swift
+│   │       ├── EngineLoadingTests.swift
+│   │       ├── VoiceRegistryTests.swift
+│   │       ├── VoiceRandomTests.swift
+│   │       ├── SynthesisTests.swift
+│   │       ├── TimestampTests.swift
+│   │       ├── SpeedTests.swift
+│   │       ├── TextChunkerTests.swift
+│   │       ├── AudioPlayerTests.swift
+│   │       ├── MultiChunkTests.swift
+│   │       ├── ComparisonTests.swift
+│   │       └── SpectralRegressionTests.swift
 │   └── one_off/
 │       └── .gitkeep
 ├── Makefile
@@ -320,22 +321,46 @@ yapper/
     └── implementation_plan.md
 ```
 
+## Build system
+
+**`xcodebuild` is required** — not `swift build`. MLX Swift includes `.metal` shader files that only Xcode's build system can compile. `swift build`/`swift test` succeed for compilation but the Metal shaders are missing at runtime, causing crashes when MLX operations execute.
+
+The `Makefile` automates this:
+- `make build` → `xcodebuild build`
+- `make test` → `xcodebuild build-for-testing` + MisakiSwift bundle copy + `xcodebuild test-without-building`
+- `make install` → symlinks to `~/.local/bin`
+
+**MisakiSwift resource bundle workaround:** MisakiSwift is a dynamic library with bundled resources (G2P lexicons). In the test context, the resource bundle must be manually copied into the framework directory after building. The Makefile handles this automatically.
+
+**Metal Toolchain:** Must be installed once: `xcodebuild -downloadComponent MetalToolchain`
+
 ## Platform constraints
 
-- **macOS 15+ (Sequoia)** — required by MisakiSwift (uses NaturalLanguage APIs from macOS 15)
+- **macOS 15+ (Sequoia)** — required by MisakiSwift
+- **iOS 18+** — YapperKit is portable (Package.swift declares both platforms)
 - **Apple Silicon only** — MLX does not run on Intel
-- **Swift 5.9+** — swift-tools-version 6.2 used by MisakiSwift
+- **Swift 6.2** — swift-tools-version 6.2 used by MisakiSwift
 
 ## Performance considerations
 
-- Kokoro-82M at 4-bit quantisation: ~50MB model, minimal memory footprint
-- KokoroSwift reports ~3.3x realtime on iPhone 13 Pro; M3/M4 should be significantly faster
-- Chunking at sentence boundaries keeps per-inference latency low (<1s per sentence)
-- For audiobook generation, chapters can be synthesised in parallel (one Metal context per chapter) if memory allows — but sequential is simpler for MVP
+- Kokoro-82M at bf16: ~327MB model, ~522KB per voice
+- Inference for "Hello, this is a test." takes ~5–6 seconds on first run (includes model init), ~2 seconds for subsequent calls
+- Chunking at sentence boundaries keeps per-inference latency manageable
+- MLX Swift's lazy evaluation means tensor operations are batched and executed on Metal GPU
+
+## Key lessons from Phase 1
+
+1. **MLX conv1d is channels-last** — the pipeline operates channels-first (matching PyTorch). All conv wrappers transpose input/output internally.
+2. **ConvTranspose1d weight layout** differs between PyTorch and MLX, and between grouped/depthwise and regular convolutions.
+3. **AdainResBlk1d shortcut vs residual paths** use different upsampling methods: shortcut = nearest-neighbour, residual = transposed conv + padding.
+4. **Voice embeddings changed format** in Kokoro v1.0: individual `.safetensors` `[510, 1, 256]` instead of bundled `.npz` `[510, 2, 256]`.
+5. **MLX is not thread-safe** for concurrent tensor operations — test suites must use `@Suite(.serialized)`.
+6. **MisakiSwift's resource bundle** must be manually copied into the framework for tests.
 
 ---
 
 ## Changelog
 
 - 0.1 (2026-04-02): Initial architecture document
-- 0.2 (2026-04-02): Option C decision — own inference layer + MisakiSwift for G2P. Added model constraints section. Removed KokoroSwift as runtime dependency. Added Inference/ directory to package structure.
+- 0.2 (2026-04-02): Option C decision
+- 0.3 (2026-04-03): Phase 1 complete. Updated to reflect actual implementation: package structure matches reality, key types match code, added build system section, key lessons learned, voice format discovery.

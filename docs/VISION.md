@@ -133,11 +133,13 @@ Key requirements for this use case:
 ## CLI Interface (draft)
 
 ```
-yapper convert <input> [-o output] [--format mp3|m4b] [--voice NAME] [--random-voice[=FILTER]] [--speed FLOAT] [--author NAME] [--title NAME]
+yapper convert <input> [-o output] [--format m4a|m4b|mp3] [--voice NAME] [--random-voice[=FILTER]] [--speed FLOAT] [--author NAME] [--title NAME] [--dry-run]
 yapper speak [TEXT] [--voice NAME] [--speed FLOAT] [--clipboard] [--selection]
 yapper voices [--list] [--preview NAME]
 yapper version
 ```
+
+Default output format: M4A for single-file conversion, M4B for multi-chapter audiobooks. MP3 available via `--format mp3`.
 
 ## Voices
 
