@@ -6,7 +6,7 @@ Fast, Apple Silicon-native text-to-speech. CLI tool and embeddable Swift library
 
 ## What it does
 
-Yapper synthesises natural-sounding speech from text, running entirely on-device via Metal GPU acceleration. No Python, no cloud APIs, no internet connection required.
+Yapper synthesizes natural-sounding speech from text, running entirely on-device via Metal GPU acceleration. No Python, no cloud APIs, no internet connection required.
 
 ```bash
 # Speak text aloud
@@ -30,10 +30,10 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 **Working now (v0.3.0):**
 
-- Full Kokoro-82M inference pipeline in Swift — BERT encoder, duration/prosody prediction, HiFi-GAN decoder, iSTFT
+- Full Kokoro-82M inference pipeline in Swift - BERT encoder, duration/prosody prediction, HiFi-GAN decoder, iSTFT
 - 28 built-in voices (American/British, male/female)
 - Sentence-level text chunking for arbitrarily long input
-- Speed control (0.5x–2.0x)
+- Speed control (0.5x-2.0x)
 - Word-level timestamps
 - Live audio playback via AVAudioEngine
 - Numerically identical output to [KokoroSwift](https://github.com/mlalma/kokoro-ios) (verified at every pipeline stage)
@@ -47,7 +47,7 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 **Planned:**
 
-- iOS support (YapperKit is portable — no macOS-specific APIs)
+- iOS support (YapperKit is portable - no macOS-specific APIs)
 - Homebrew formula
 - GUI wrapper
 - Multiple language support
@@ -60,10 +60,10 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 ### Runtime tools (for file conversion only)
 
-- `ffmpeg` — audio encoding (`brew install ffmpeg`)
-- `pandoc` — document conversion (`brew install pandoc`)
-- `pdftotext` — PDF extraction (`brew install poppler`)
-- `ebook-convert` — mobi support (install [Calibre](https://calibre-ebook.com))
+- `ffmpeg` - audio encoding (`brew install ffmpeg`)
+- `pandoc` - document conversion (`brew install pandoc`)
+- `pdftotext` - PDF extraction (`brew install poppler`)
+- `ebook-convert` - mobi support (install [Calibre](https://calibre-ebook.com))
 
 ## Quickstart
 
@@ -108,8 +108,8 @@ make test    # runs 39 regression tests
 
 Yapper is structured as two layers:
 
-- **YapperKit** — Swift library. Handles model loading, inference, streaming audio, and voice management. Embeddable in other Swift projects via Swift Package Manager.
-- **yapper** — CLI tool built on YapperKit. Handles document conversion, chapter detection, and audiobook assembly.
+- **YapperKit** - Swift library. Handles model loading, inference, streaming audio, and voice management. Embeddable in other Swift projects via Swift Package Manager.
+- **yapper** - CLI tool built on YapperKit. Handles document conversion, chapter detection, and audiobook assembly.
 
 The inference pipeline implements the full Kokoro-82M architecture (StyleTTS2-based, 82M parameters, non-autoregressive) using [MLX Swift](https://github.com/ml-explore/mlx-swift) for Metal-accelerated computation. Grapheme-to-phoneme conversion uses [MisakiSwift](https://github.com/mlalma/MisakiSwift). The pipeline was developed using [KokoroSwift](https://github.com/mlalma/kokoro-ios) as a reference implementation.
 
@@ -134,21 +134,21 @@ docs/                   # VISION, architecture, implementation plan
 
 ## Documentation
 
-- [Vision](docs/VISION.md) — goals, use cases, and future plans
-- [Architecture](docs/architecture.md) — system design, inference pipeline, build system
-- [Implementation plan](docs/implementation_plan.md) — phased delivery, issue tracking
+- [Vision](docs/VISION.md) - goals, use cases, and future plans
+- [Architecture](docs/architecture.md) - system design, inference pipeline, build system
+- [Implementation plan](docs/implementation_plan.md) - phased delivery, issue tracking
 
 ## Acknowledgements
 
-- [hexgrad/Kokoro](https://github.com/hexgrad/kokoro) — the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
-- [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) — KokoroSwift, the reference implementation ([MIT](https://opensource.org/licenses/MIT))
-- [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) — grapheme-to-phoneme library ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
-- [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) — [Apple](https://github.com/ml-explore)'s MLX framework for Swift ([MIT](https://opensource.org/licenses/MIT))
-- [apple/swift-argument-parser](https://github.com/apple/swift-argument-parser) — CLI argument parsing ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- [hexgrad/Kokoro](https://github.com/hexgrad/kokoro) - the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) - KokoroSwift, the reference implementation ([MIT](https://opensource.org/licenses/MIT))
+- [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) - grapheme-to-phoneme library ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) - [Apple](https://github.com/ml-explore)'s MLX framework for Swift ([MIT](https://opensource.org/licenses/MIT))
+- [apple/swift-argument-parser](https://github.com/apple/swift-argument-parser) - CLI argument parsing ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
 - Kokoro-82M training data: [Koniwa](https://github.com/koniwa/koniwa) ([CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)), [SIWIS](https://datashare.ed.ac.uk/handle/10283/2353) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))
 
 See [NOTICE](NOTICE) for full attribution details.
 
 ## Licence
 
-Apache 2.0 — Copyright Taḋg Paul. See [LICENSE](LICENSE).
+Apache 2.0 - Copyright Taḋg Paul. See [LICENSE](LICENSE).
