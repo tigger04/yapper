@@ -144,6 +144,10 @@ docs/                   # VISION, architecture, implementation plan
 - [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) — KokoroSwift, the reference implementation (MIT)
 - [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) — grapheme-to-phoneme library (Apache 2.0)
 - [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) — Apple's MLX framework for Swift (MIT)
+- [apple/swift-argument-parser](https://github.com/apple/swift-argument-parser) — CLI argument parsing (Apache 2.0)
+- Kokoro-82M training data: Koniwa (CC BY 3.0), SIWIS (CC BY 4.0)
+
+See [NOTICE](NOTICE) for full attribution details.
 
 ## Licence
 

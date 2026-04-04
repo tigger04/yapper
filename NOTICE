@@ -1,0 +1,33 @@
+Yapper
+Copyright 2026 Tadg Paul
+
+This product includes software and model weights developed by third parties:
+
+Kokoro-82M (model weights and voice embeddings)
+Copyright hexgrad
+Licensed under the Apache License, Version 2.0
+https://huggingface.co/hexgrad/Kokoro-82M
+
+MisakiSwift (grapheme-to-phoneme library)
+Copyright mlalma
+Licensed under the Apache License, Version 2.0
+https://github.com/mlalma/MisakiSwift
+
+KokoroSwift (reference implementation for inference architecture)
+Copyright mlalma
+Licensed under the MIT License
+https://github.com/mlalma/kokoro-ios
+
+MLX Swift (Metal-accelerated array framework)
+Copyright Apple Inc.
+Licensed under the MIT License
+https://github.com/ml-explore/mlx-swift
+
+Swift Argument Parser
+Copyright Apple Inc.
+Licensed under the Apache License, Version 2.0
+https://github.com/apple/swift-argument-parser
+
+Kokoro-82M training data attributions:
+- Koniwa dataset: CC BY 3.0
+- SIWIS dataset: CC BY 4.0
