@@ -47,8 +47,8 @@ class Yapper < Formula
 
   def caveats
     <<~EOS
-      Yapper ships as a prebuilt Apple Silicon binary, ad-hoc code signed
-      (not yet notarised — tracked in issue #13).
+      Yapper ships as a prebuilt Apple Silicon binary, Developer ID signed
+      with hardened runtime and notarised by Apple.
 
       Model weights and English voices are downloaded automatically at install
       time from the tigger04/yapper models-v1 release (Apache 2.0, redistributed

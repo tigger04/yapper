@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: Builds a release binary, tags a GitHub release, and updates the Homebrew formula.
-# ABOUTME: Ships an ad-hoc signed prebuilt binary; formula never invokes xcodebuild or swift build.
+# ABOUTME: Builds a release binary, Developer ID signs and notarises it, tags a GitHub release, and updates the Homebrew formula.
+# ABOUTME: Auto-discovers the signing identity from the login keychain and uses the yapper-notary keychain profile for notarytool.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -13,6 +13,7 @@ MANIFEST="${PROJECT_ROOT}/models/manifest.json"
 TAP_REPO="tigger04/homebrew-tap"
 FORMULA_TAP_PATH="Formula/yapper.rb"
 SCHEME="yapper"
+NOTARY_PROFILE="yapper-notary"
 BUNDLE_NAMES=(
     "mlx-swift_Cmlx.bundle"
     "MisakiSwift_MisakiSwift.bundle"
@@ -25,6 +26,39 @@ command -v gh >/dev/null 2>&1 || die "gh (GitHub CLI) is required."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."
 command -v xcodebuild >/dev/null 2>&1 || die "xcodebuild is required."
 command -v codesign >/dev/null 2>&1 || die "codesign is required."
+command -v ditto >/dev/null 2>&1 || die "ditto is required (ships with macOS)."
+command -v xcrun >/dev/null 2>&1 || die "xcrun is required."
+
+# Auto-discover the Developer ID Application signing identity from the login keychain.
+# No hardcoding — works on any release machine that has exactly one such cert installed.
+discover_identity() {
+    local matches
+    matches=$(security find-identity -v -p codesigning 2>/dev/null \
+        | grep -E '"Developer ID Application: [^"]+"' \
+        | sed -E 's/.*"(Developer ID Application: [^"]+)".*/\1/')
+    if [[ -z "${matches}" ]]; then
+        die "No 'Developer ID Application' certificate found in keychain.
+Create one via Xcode → Settings → Accounts → Manage Certificates → + → Developer ID Application,
+then re-run this script."
+    fi
+    local count
+    count=$(printf '%s\n' "${matches}" | wc -l | tr -d ' ')
+    if [[ "${count}" -gt 1 ]]; then
+        printf '%s\n' "${matches}" >&2
+        die "Multiple Developer ID Application certificates found. Remove duplicates or add an --identity override."
+    fi
+    printf '%s' "${matches}"
+}
+
+# Sanity-check the notarytool keychain profile works before we spend time building.
+verify_notary_profile() {
+    if ! xcrun notarytool history --keychain-profile "${NOTARY_PROFILE}" >/dev/null 2>&1; then
+        die "notarytool keychain profile '${NOTARY_PROFILE}' not configured or unable to reach Apple's notary service.
+Set it up once with:
+  xcrun notarytool store-credentials \"${NOTARY_PROFILE}\" \\
+      --apple-id YOUR_APPLE_ID --team-id YOUR_TEAM_ID --password APP_SPECIFIC_PW"
+    fi
+}
 
 get_current_version() {
     grep -oE 'let version = "[0-9]+\.[0-9]+\.[0-9]+"' "${VERSION_FILE}" \
@@ -64,6 +98,16 @@ if git -C "${PROJECT_ROOT}" rev-parse "${TAG}" >/dev/null 2>&1; then
 fi
 [[ -f "${MANIFEST}" ]] || die "models/manifest.json not found. Run 'make release-models' first."
 
+# Discover signing identity and verify notarytool profile BEFORE doing any work.
+# This fails fast on a misconfigured machine instead of wasting a build.
+printf 'Discovering Developer ID signing identity...\n'
+IDENTITY=$(discover_identity)
+printf '  %s\n' "${IDENTITY}"
+
+printf 'Verifying notarytool profile %s...\n' "${NOTARY_PROFILE}"
+verify_notary_profile
+printf '  ok\n\n'
+
 # 1. Update version in source
 printf 'Updating version in %s...\n' "${VERSION_FILE}"
 tmpfile=$(mktemp)
@@ -99,12 +143,7 @@ for bundle in "${BUNDLE_NAMES[@]}"; do
     [[ -d "${RELEASE_DIR}/${bundle}" ]] || die "Expected resource bundle missing: ${bundle}"
 done
 
-# 3. Ad-hoc code sign the binary with hardened runtime
-printf '\nAd-hoc signing binary (hardened runtime)...\n'
-codesign --force --sign - --options runtime --timestamp=none "${RELEASE_DIR}/yapper"
-codesign --verify --verbose "${RELEASE_DIR}/yapper" 2>&1 | sed 's/^/  /'
-
-# 4. Stage binary + bundles and tar
+# 3. Stage binary + bundles for signing
 staging="${build_dir}/stage"
 mkdir -p "${staging}"
 cp -- "${RELEASE_DIR}/yapper" "${staging}/"
@@ -112,6 +151,43 @@ for bundle in "${BUNDLE_NAMES[@]}"; do
     cp -R -- "${RELEASE_DIR}/${bundle}" "${staging}/"
 done
 
+# 4. Inside-out codesign: bundles first, then main binary.
+# Apple requires nested code-signed items be signed before their containers.
+printf '\nSigning with %s...\n' "${IDENTITY}"
+for bundle in "${BUNDLE_NAMES[@]}"; do
+    codesign --force --sign "${IDENTITY}" \
+             --options runtime \
+             --timestamp \
+             "${staging}/${bundle}"
+    printf '  signed %s\n' "${bundle}"
+done
+codesign --force --sign "${IDENTITY}" \
+         --options runtime \
+         --timestamp \
+         "${staging}/yapper"
+printf '  signed yapper\n'
+
+# 5. Create the notary submission zip. ditto preserves the signature envelope;
+# plain zip strips extended attributes and breaks nested signatures.
+printf '\nSubmitting to Apple notary service...\n'
+notary_zip="${build_dir}/yapper-for-notary.zip"
+(cd "${staging}" && ditto -c -k --keepParent . "${notary_zip}")
+
+submit_output=$(xcrun notarytool submit "${notary_zip}" \
+    --keychain-profile "${NOTARY_PROFILE}" \
+    --wait 2>&1)
+printf '%s\n' "${submit_output}" | sed 's/^/  /'
+
+if ! printf '%s\n' "${submit_output}" | grep -Eq 'status: Accepted'; then
+    die "Notarisation did not return status Accepted. Check the output above and run:
+  xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}"
+fi
+
+# 6. Pre-upload verification gate — fails fast if anything is wrong with the signed artefact
+printf '\nVerifying signed artefact...\n'
+bash "${SCRIPT_DIR}/verify-signature.sh" "${staging}" || die "verify-signature.sh rejected the signed artefact"
+
+# 7. Tar the signed + notarised binary and bundles
 printf '\nCreating %s...\n' "${BINARY_ASSET}"
 binary_tarball="${build_dir}/${BINARY_ASSET}"
 (cd "${staging}" && tar -czf "${binary_tarball}" yapper "${BUNDLE_NAMES[@]}")
@@ -142,7 +218,19 @@ brew tap tigger04/tap
 brew install yapper
 \`\`\`
 
-The tarball contains the ad-hoc signed \`yapper\` binary and its required Swift resource bundles. See \`scripts/release.sh\` for how it was built and packaged."
+The tarball contains the Developer ID signed and Apple notarised \`yapper\` binary and its required Swift resource bundles. See \`scripts/release.sh\` for how it was built, signed, notarised, and packaged."
+
+# Post-upload verification: download the asset back and re-verify.
+# Catches corruption in transit and confirms what users get matches what was notarised.
+printf 'Re-verifying uploaded asset...\n'
+verify_dir="${build_dir}/verify"
+mkdir -p "${verify_dir}"
+gh release download "${TAG}" --repo tigger04/yapper \
+    --pattern "${BINARY_ASSET}" \
+    --dir "${verify_dir}"
+(cd "${verify_dir}" && tar -xzf "${BINARY_ASSET}")
+bash "${SCRIPT_DIR}/verify-signature.sh" "${verify_dir}" \
+    || die "Uploaded asset failed verification — the release is broken. Delete it with: gh release delete ${TAG}"
 
 # 7. Load model/voices SHA256 from manifest
 MODEL_URL=$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['model']['url'])")
@@ -202,8 +290,8 @@ class Yapper < Formula
 
   def caveats
     <<~EOS
-      Yapper ships as a prebuilt Apple Silicon binary, ad-hoc code signed
-      (not yet notarised — tracked in issue #13).
+      Yapper ships as a prebuilt Apple Silicon binary, Developer ID signed
+      with hardened runtime and notarised by Apple.
 
       Model weights and English voices are downloaded automatically at install
       time from the tigger04/yapper models-v1 release (Apache 2.0, redistributed
