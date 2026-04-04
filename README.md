@@ -140,12 +140,12 @@ docs/                   # VISION, architecture, implementation plan
 
 ## Acknowledgements
 
-- [hexgrad/Kokoro](https://github.com/hexgrad/kokoro) — the Kokoro-82M model (Apache 2.0)
-- [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) — KokoroSwift, the reference implementation (MIT)
-- [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) — grapheme-to-phoneme library (Apache 2.0)
-- [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) — Apple's MLX framework for Swift (MIT)
-- [apple/swift-argument-parser](https://github.com/apple/swift-argument-parser) — CLI argument parsing (Apache 2.0)
-- Kokoro-82M training data: Koniwa (CC BY 3.0), SIWIS (CC BY 4.0)
+- [hexgrad/Kokoro](https://github.com/hexgrad/kokoro) — the [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) model ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) — KokoroSwift, the reference implementation ([MIT](https://opensource.org/licenses/MIT))
+- [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) — grapheme-to-phoneme library ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) — [Apple](https://github.com/ml-explore)'s MLX framework for Swift ([MIT](https://opensource.org/licenses/MIT))
+- [apple/swift-argument-parser](https://github.com/apple/swift-argument-parser) — CLI argument parsing ([Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0))
+- Kokoro-82M training data: [Koniwa](https://github.com/koniwa/koniwa) ([CC BY 3.0](https://creativecommons.org/licenses/by/3.0/)), [SIWIS](https://datashare.ed.ac.uk/handle/10283/2353) ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))
 
 See [NOTICE](NOTICE) for full attribution details.
 
