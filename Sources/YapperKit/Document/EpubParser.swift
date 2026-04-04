@@ -7,6 +7,11 @@ import Foundation
 public struct Chapter {
     public let title: String
     public let text: String
+
+    public init(title: String, text: String) {
+        self.title = title
+        self.text = text
+    }
 }
 
 /// Metadata extracted from an epub.
@@ -23,14 +28,14 @@ public struct EpubParseResult {
 }
 
 /// Parses epub files to extract chapter structure, text content, and metadata.
-struct EpubParser {
+public struct EpubParser {
 
     /// Parse an epub file at the given path.
     ///
     /// - Parameter path: path to the .epub file
     /// - Returns: parsed chapters and metadata
     /// - Throws: if the file is not a valid epub
-    static func parse(_ path: String) throws -> EpubParseResult {
+    public static func parse(_ path: String) throws -> EpubParseResult {
         let url = URL(fileURLWithPath: path)
 
         // Validate file exists
