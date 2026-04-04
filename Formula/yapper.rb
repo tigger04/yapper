@@ -2,7 +2,7 @@ class Yapper < Formula
   desc "Fast, Apple Silicon-native text-to-speech CLI and Swift library"
   homepage "https://github.com/tigger04/yapper"
   url "https://github.com/tigger04/yapper/releases/download/v0.8.1/yapper-macos-arm64.tar.gz"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "ae97ebd0fac75dd28fd2b14e6c97182c76a047fb3ad506df00fd7c5de76df827"
   license "Apache-2.0"
   version "0.8.1"
 
@@ -12,12 +12,12 @@ class Yapper < Formula
 
   resource "model" do
     url "https://github.com/tigger04/yapper/releases/download/models-v1/kokoro-v1_0.safetensors"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+    sha256 "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8"
   end
 
   resource "voices" do
     url "https://github.com/tigger04/yapper/releases/download/models-v1/voices.tar.gz"
-    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+    sha256 "bf273cf082639010bc5e94a5ff19f62c69aa4ded7a0651dc8a3c6d19e855b459"
   end
 
   def install
