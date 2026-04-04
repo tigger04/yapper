@@ -1,46 +1,150 @@
-tigger04/make-audiobook is graet that it's x-platform but it relies on either piper or kokoro-tts which is on top of python and it's SLOW
-I'm sitting here on M3 and M4 hardware that's not being taken advantage of
+# Yapper
 
-I'm ready to park make-audiobook and look into creating something new that's fully optimized for apple silicon - something fast that can do real time speech  (or faster if generating audiobooks) and that can be used in a variety of contexts - not just for making audiobooks but also for things like screen readers, voice assistants, etc.
+Fast, Apple Silicon-native text-to-speech. CLI tool and embeddable Swift library, powered by [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [MLX](https://github.com/ml-explore/mlx-swift).
 
+> **Status: Work in progress.** The core inference engine is complete and producing high-quality speech. CLI commands and audiobook generation are under active development.
 
----
+## What it does
 
-initial cursory research dump:
+Yapper synthesises natural-sounding speech from text, running entirely on-device via Metal GPU acceleration. No Python, no cloud APIs, no internet connection required.
 
-It does both. The short answer: Kokoro is fast enough for real-time use, and several implementations explicitly support streaming.
-Streaming/real-time options:
+```bash
+# Speak text aloud
+yapper speak "Hello, this is yapper."
 
-The CLI wrapper by nazdridoy supports a --stream flag that pipes audio directly to playback GitHub (e.g. echo "Hello" | kokoro-tts - --stream).
-The Rust implementation (Kokoros) has an OpenAI-compatible HTTP server that supports streaming audio generation via "stream": true, with reported time-to-first-audio of 1–2 seconds. GitHub You can pipe it straight into ffplay for live playback.
-There's a fastrtc integration pairing Kokoro with Moonshine STT for real-time voice chat Medium, which is about as real-time as it gets.
+# List available voices
+yapper voices
 
-Why it works for real-time: The architecture generates speech in a single efficient pass without diffusion or autoregressive bottlenecks, which makes it fast enough for both real-time and batch use. Unreal Speech At 82M parameters it's small enough to run on modest hardware at interactive speeds.
-Batch/pre-baked: It also handles long-form generation well, with EPUB/PDF ingestion, chapter splitting, and output to wav/mp3 files.
-So for your poetry video pipeline, you could use it either way: pre-render audio files as you're doing now, or potentially stream TTS in a more interactive workflow. The Rust version would be worth a look if latency matters to you, given the CLI-first and FOSS angle.
-One caveat from the official HuggingFace page: sites like kokorottsai.com and kokorotts.net are flagged by the maintainer as likely scams Hugging Face, so stick to the hexgrad GitHub/HuggingFace repos as canonical sources.link?6:19 PMThe main official sources:
+# Convert a text file to audio
+yapper convert notes.txt -o notes.m4a
 
-GitHub: https://github.com/hexgrad/kokoro
-HuggingFace model card: https://huggingface.co/hexgrad/Kokoro-82M
-HuggingFace demo space: https://huggingface.co/spaces/hexgrad/Kokoro-TTS
+# Convert an epub to an audiobook with chapter markers
+yapper convert book.epub -o book.m4b
+```
 
-And the community implementations I mentioned:
+## Why
 
-Rust version (Kokoros): https://github.com/lucasjinreal/Kokoros
-CLI wrapper (Python): https://github.com/nazdridoy/kokoro-tts
-fastrtc real-time voice chat tutorial: https://medium.com/@princekrampah/real-time-llm-voice-chat-in-python-kokoro-moonshine-open-source-models-6c6270cbe967
-and how do they perform on apple silicon6:20 PMSearched the webSearched the webRuns well on Apple Silicon. Several paths, depending on what you want:
-Native MLX (best for M-series):
-mlx-audio is built specifically on Apple's MLX framework, optimised for Apple Silicon, with Kokoro as a supported model. GitHub This is probably the most natural fit for you. It supports streaming, quantization (down to 4-bit), and has an OpenAI-compatible REST API. CLI is straightforward:
-bashpip install mlx-audio
-mlx_audio.tts.generate --model mlx-community/Kokoro-82M-bf16 --text 'Hello!' --stream --lang_code a
-There's also a Swift/MLX port (kokoro-ios) that generates audio roughly 3.3× faster than real-time on an iPhone 13 Pro GitHub, so on an M-series Mac it'll be quicker still.
-ONNX Runtime:
-kokoro-onnx focuses on running efficiently on commodity hardware including macOS with Apple Silicon, delivering near real-time performance. SourceForge This is the lighter-weight option if you don't want the MLX dependency chain.
-PyTorch with MPS:
-The official hexgrad repo notes you can set PYTORCH_ENABLE_MPS_FALLBACK=1 to enable GPU acceleration on M1/M2/M3/M4 devices. GitHub
-Full local voice stack:
-There's a tested architecture combining Whisper.cpp + Ollama + Kokoro ONNX on Apple Silicon that achieves sub-3-second turn latency after the first exchange, tested on an M3 Pro. DEV Community Total footprint around 500MB.
-macOS apps:
-Kokori is a native macOS menubar app wrapping Kokoro TTS with a local REST API, fully offline. Kokori And MimikaStudio reports sub-200ms latency for Kokoro TTS on Apple Silicon. GitHub
-For your storyboard-gen pipeline, mlx-audio is probably the most interesting option: FOSS, CLI-friendly, native Metal acceleration, streaming support, and you could quantize the model to keep memory footprint minimal.
+Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't fully exploit Apple Silicon hardware. Yapper replaces that stack with native Swift + Metal inference, targeting real-time-or-faster synthesis on M-series Macs.
+
+## Features
+
+**Working now (v0.3.0):**
+
+- Full Kokoro-82M inference pipeline in Swift — BERT encoder, duration/prosody prediction, HiFi-GAN decoder, iSTFT
+- 28 built-in voices (American/British, male/female)
+- Sentence-level text chunking for arbitrarily long input
+- Speed control (0.5x–2.0x)
+- Word-level timestamps
+- Live audio playback via AVAudioEngine
+- Numerically identical output to [KokoroSwift](https://github.com/mlalma/kokoro-ios) (verified at every pipeline stage)
+
+**In progress:**
+
+- CLI commands (`speak`, `voices`, `convert`)
+- Document conversion (epub, PDF, docx, odt, markdown, HTML, mobi)
+- Audiobook generation with chapter markers (M4B) and per-chapter voice assignment
+- Clipboard and screen selection reading
+
+**Planned:**
+
+- iOS support (YapperKit is portable — no macOS-specific APIs)
+- Homebrew formula
+- GUI wrapper
+- Multiple language support
+
+## Requirements
+
+- macOS 15+ (Sequoia) on Apple Silicon
+- Xcode 16+ with Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`)
+- [Kokoro-82M model weights](#model-setup) (~327MB)
+
+### Runtime tools (for file conversion only)
+
+- `ffmpeg` — audio encoding (`brew install ffmpeg`)
+- `pandoc` — document conversion (`brew install pandoc`)
+- `pdftotext` — PDF extraction (`brew install poppler`)
+- `ebook-convert` — mobi support (install [Calibre](https://calibre-ebook.com))
+
+## Quickstart
+
+### Build
+
+```bash
+git clone https://github.com/tigger04/yapper.git
+cd yapper
+make build
+make install    # symlinks to ~/.local/bin/yapper
+```
+
+### Model setup
+
+Download the Kokoro-82M model weights and at least one voice:
+
+```bash
+mkdir -p ~/.local/share/yapper/models ~/.local/share/yapper/voices
+
+# Model weights (~327MB)
+curl -L -o ~/.local/share/yapper/models/kokoro-v1_0.safetensors \
+  "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/kokoro-v1_0.safetensors"
+
+# Config
+curl -L -o ~/.local/share/yapper/models/config.json \
+  "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/config.json"
+
+# Voices (download as many as you like, ~522KB each)
+for voice in af_heart af_bella am_adam bf_emma bm_daniel; do
+  curl -L -o ~/.local/share/yapper/voices/${voice}.safetensors \
+    "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/voices/${voice}.safetensors"
+done
+```
+
+### Test
+
+```bash
+make test    # runs 39 regression tests
+```
+
+## Architecture
+
+Yapper is structured as two layers:
+
+- **YapperKit** — Swift library. Handles model loading, inference, streaming audio, and voice management. Embeddable in other Swift projects via Swift Package Manager.
+- **yapper** — CLI tool built on YapperKit. Handles document conversion, chapter detection, and audiobook assembly.
+
+The inference pipeline implements the full Kokoro-82M architecture (StyleTTS2-based, 82M parameters, non-autoregressive) using [MLX Swift](https://github.com/ml-explore/mlx-swift) for Metal-accelerated computation. Grapheme-to-phoneme conversion uses [MisakiSwift](https://github.com/mlalma/MisakiSwift). The pipeline was developed using [KokoroSwift](https://github.com/mlalma/kokoro-ios) as a reference implementation.
+
+For details, see [docs/architecture.md](docs/architecture.md) and [docs/VISION.md](docs/VISION.md).
+
+## Project structure
+
+```
+Sources/
+├── YapperKit/          # Embeddable TTS library
+│   ├── Engine/         # YapperEngine, TextChunker
+│   ├── Inference/      # Kokoro-82M pipeline (17 files)
+│   ├── Audio/          # AudioPlayer, MelSpectrogram
+│   ├── Voice/          # VoiceRegistry, Voice types
+│   └── Timestamps/     # WordTimestamp
+└── yapper/             # CLI tool
+    └── Commands/       # speak, voices, convert
+
+Tests/regression/       # 39 regression tests
+docs/                   # VISION, architecture, implementation plan
+```
+
+## Documentation
+
+- [Vision](docs/VISION.md) — goals, use cases, and future plans
+- [Architecture](docs/architecture.md) — system design, inference pipeline, build system
+- [Implementation plan](docs/implementation_plan.md) — phased delivery, issue tracking
+
+## Acknowledgements
+
+- [hexgrad/Kokoro](https://github.com/hexgrad/kokoro) — the Kokoro-82M model (Apache 2.0)
+- [mlalma/kokoro-ios](https://github.com/mlalma/kokoro-ios) — KokoroSwift, the reference implementation (MIT)
+- [mlalma/MisakiSwift](https://github.com/mlalma/MisakiSwift) — grapheme-to-phoneme library (Apache 2.0)
+- [ml-explore/mlx-swift](https://github.com/ml-explore/mlx-swift) — Apple's MLX framework for Swift (MIT)
+
+## Licence
+
+MIT — Copyright Taḋg Paul
