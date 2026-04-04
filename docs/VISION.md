@@ -8,7 +8,9 @@ A fast, Apple Silicon-native TTS toolkit. CLI-first, embeddable as a Swift libra
 
 ## Why
 
-[tigger04/make-audiobook](https://github.com/tigger04/make-audiobook) works but relies on Python-based TTS engines (Piper, kokoro-tts) that are slow and don't exploit M-series hardware. Yapper replaces that stack with native Metal-accelerated inference, targeting real-time-or-faster synthesis.
+High-quality text-to-speech is an accessibility technology that gives real, meaningful benefit to people with disability. It should be open source, fast, and free from commercial paywalls.
+
+[tigger04/make-audiobook](https://github.com/tigger04/make-audiobook) works but relies on Python-based TTS engines (Piper, kokoro-tts) that are slow and don't exploit M-series hardware. Yapper replaces that stack with native Metal-accelerated inference, running entirely on-device with no cloud dependencies.
 
 ## Foundation
 
@@ -119,10 +121,10 @@ Key requirements for this use case:
 
 ### Future considerations
 
+- Pronunciation customization - user-defined lexicon overrides for names, technical terms, and words the G2P mispronounces. MisakiSwift supports inline overrides via `[word](/phonemes/)` syntax; a persistent user dictionary is planned.
 - iOS support - YapperKit is portable to iOS 18+ (all dependencies support it). The CLI is macOS-only but the library layer has no macOS-specific APIs.
 - GUI wrapper (macOS native, and potentially iOS/iPadOS)
 - Voice cloning / custom voice training
-- Pronunciation customization (lexicon overrides)
 - Multiple language support (Kokoro supports EN, JA, ZH, DE, FR, and others)
 - Batch/queue processing
 - Opus output format

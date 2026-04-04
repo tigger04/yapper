@@ -24,7 +24,9 @@ yapper convert book.epub -o book.m4b
 
 ## Why
 
-Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't fully exploit Apple Silicon hardware. Yapper replaces that stack with native Swift + Metal inference, targeting real-time-or-faster synthesis on M-series Macs.
+High-quality text-to-speech is an accessibility technology that gives real, meaningful benefit to people with disability. It should be open source, fast, and free from commercial paywalls. Yapper exists to make that a reality on Apple Silicon.
+
+Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't fully exploit M-series hardware. Yapper replaces that stack with native Swift + Metal inference, running entirely on-device with no cloud dependencies.
 
 ## Features
 
@@ -47,6 +49,7 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 **Planned:**
 
+- Pronunciation customization (lexicon overrides for names, technical terms, etc.)
 - iOS support (YapperKit is portable - no macOS-specific APIs)
 - Homebrew formula
 - GUI wrapper
