@@ -4,30 +4,30 @@ Copyright 2026 Tadg Paul
 This product includes software and model weights developed by third parties:
 
 Kokoro-82M (model weights and voice embeddings)
-Copyright hexgrad
-Licensed under the Apache License, Version 2.0
-https://huggingface.co/hexgrad/Kokoro-82M
+Copyright hexgrad (https://github.com/hexgrad)
+Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Source: https://huggingface.co/hexgrad/Kokoro-82M
 
 MisakiSwift (grapheme-to-phoneme library)
-Copyright mlalma
-Licensed under the Apache License, Version 2.0
-https://github.com/mlalma/MisakiSwift
+Copyright mlalma (https://github.com/mlalma)
+Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Source: https://github.com/mlalma/MisakiSwift
 
 KokoroSwift (reference implementation for inference architecture)
-Copyright mlalma
-Licensed under the MIT License
-https://github.com/mlalma/kokoro-ios
+Copyright mlalma (https://github.com/mlalma)
+Licensed under the MIT License (https://opensource.org/licenses/MIT)
+Source: https://github.com/mlalma/kokoro-ios
 
 MLX Swift (Metal-accelerated array framework)
-Copyright Apple Inc.
-Licensed under the MIT License
-https://github.com/ml-explore/mlx-swift
+Copyright Apple Inc. (https://github.com/ml-explore)
+Licensed under the MIT License (https://opensource.org/licenses/MIT)
+Source: https://github.com/ml-explore/mlx-swift
 
 Swift Argument Parser
-Copyright Apple Inc.
-Licensed under the Apache License, Version 2.0
-https://github.com/apple/swift-argument-parser
+Copyright Apple Inc. (https://github.com/apple)
+Licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
+Source: https://github.com/apple/swift-argument-parser
 
 Kokoro-82M training data attributions:
-- Koniwa dataset: CC BY 3.0
-- SIWIS dataset: CC BY 4.0
+- Koniwa dataset (https://github.com/koniwa/koniwa): CC BY 3.0 (https://creativecommons.org/licenses/by/3.0/)
+- SIWIS dataset (https://datashare.ed.ac.uk/handle/10283/2353): CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
