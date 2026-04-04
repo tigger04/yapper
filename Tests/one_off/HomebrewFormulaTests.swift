@@ -264,13 +264,9 @@ struct HomebrewFormulaTests {
         }
     }
 
-    // OT-13.16: verify-signature.sh runs spctl --assess and expects Notarized Developer ID
-    @Test("OT-13.16: verify-signature.sh runs spctl --assess and expects Notarized Developer ID")
-    func verifyScriptChecksSpctl() throws {
-        let script = try Self.read("scripts/verify-signature.sh")
-        #expect(script.contains("spctl --assess"),
-                "verify-signature.sh must run spctl --assess")
-        #expect(script.contains("source=Notarized Developer ID"),
-                "verify-signature.sh must check spctl reports 'Notarized Developer ID'")
-    }
+    // OT-13.16: 🚫 removed — spctl --assess is the wrong tool for bare Mach-O binaries.
+    // It requires a .app bundle and reports 'does not seem to be an app' otherwise.
+    // Notarisation acceptance is verified via notarytool 'status: Accepted' (OT-13.9),
+    // and signature validity is verified via codesign (OT-13.12, 13.13). The end-user
+    // Gatekeeper path is exercised in UT-13.2 and UT-13.3.
 }

@@ -21,7 +21,14 @@ Verifies:
   3. Main binary has a secure timestamp
   4. Main binary was signed with hardened runtime
   5. Each .bundle has its own _CodeSignature/ (inside-out signing)
-  6. spctl assesses the binary as notarised Developer ID software
+
+Notarisation acceptance is verified separately by release.sh at submission time
+via notarytool's 'status: Accepted' response — spctl --assess does not recognise
+bare Mach-O binaries (it reports 'does not seem to be an app'), and stapling does
+not apply to bare Mach-O, so local post-hoc notarisation verification is not
+feasible. Trust chain for end users: the signature alone (Developer ID + hardened
+runtime + timestamp) is what Apple's online Gatekeeper check validates against
+its notary database at first launch.
 
 Exits 0 on all checks passing, non-zero with diagnostic output on any failure.
 EOF
@@ -88,17 +95,5 @@ for bundle in "${expected_bundles[@]}"; do
         || die "codesign --verify failed on ${bundle}"
     ok "${bundle} signed (inside-out)"
 done
-
-# 6. Gatekeeper assessment
-# spctl writes its verdict to stderr; we capture both streams and grep.
-spctl_output=$(spctl --assess --type execute --verbose=4 "${binary}" 2>&1) || {
-    printf '%s\n' "${spctl_output}" | sed 's/^/    /' >&2
-    die "spctl --assess rejected the binary"
-}
-if ! printf '%s\n' "${spctl_output}" | grep -Eq 'source=Notarized Developer ID'; then
-    printf '%s\n' "${spctl_output}" | sed 's/^/    /' >&2
-    die "spctl did not report the binary as Notarized Developer ID"
-fi
-ok "spctl assessed as Notarized Developer ID"
 
 printf 'All checks passed.\n'
