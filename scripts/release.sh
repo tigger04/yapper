@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ABOUTME: Creates a tagged GitHub release for yapper and updates the Homebrew formula.
-# ABOUTME: Bumps version, tags, pushes, and mirrors Formula/yapper.rb to tigger04/homebrew-tap.
+# ABOUTME: Builds a release binary, tags a GitHub release, and updates the Homebrew formula.
+# ABOUTME: Ships an ad-hoc signed prebuilt binary; formula never invokes xcodebuild or swift build.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -12,11 +12,19 @@ FORMULA_LOCAL="${PROJECT_ROOT}/Formula/yapper.rb"
 MANIFEST="${PROJECT_ROOT}/models/manifest.json"
 TAP_REPO="tigger04/homebrew-tap"
 FORMULA_TAP_PATH="Formula/yapper.rb"
+SCHEME="yapper"
+BUNDLE_NAMES=(
+    "mlx-swift_Cmlx.bundle"
+    "MisakiSwift_MisakiSwift.bundle"
+    "ZIPFoundation_ZIPFoundation.bundle"
+)
 
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 command -v gh >/dev/null 2>&1 || die "gh (GitHub CLI) is required."
 command -v python3 >/dev/null 2>&1 || die "python3 is required."
+command -v xcodebuild >/dev/null 2>&1 || die "xcodebuild is required."
+command -v codesign >/dev/null 2>&1 || die "codesign is required."
 
 get_current_version() {
     grep -oE 'let version = "[0-9]+\.[0-9]+\.[0-9]+"' "${VERSION_FILE}" \
@@ -27,8 +35,7 @@ bump_version() {
     local current="$1"
     local major minor patch
     IFS='.' read -r major minor patch <<< "${current}"
-    minor=$((minor + 1))
-    patch=0
+    patch=$((patch + 1))
     printf '%s.%s.%s' "${major}" "${minor}" "${patch}"
 }
 
@@ -42,6 +49,7 @@ else
 fi
 
 TAG="v${NEW_VERSION}"
+BINARY_ASSET="yapper-macos-arm64.tar.gz"
 
 printf '=== Yapper Release ===\n'
 printf '  Current version: %s\n' "${CURRENT_VERSION}"
@@ -65,7 +73,52 @@ mv "${tmpfile}" "${VERSION_FILE}"
 verify_version=$(get_current_version)
 [[ "${verify_version}" == "${NEW_VERSION}" ]] || die "Version bump failed (got ${verify_version})"
 
-# 2. Commit, tag, push
+# 2. Build release binary with xcodebuild (outside Homebrew sandbox — this is the point)
+printf '\nBuilding release binary with xcodebuild...\n'
+build_dir=$(mktemp -d)
+trap 'rm -rf -- "${build_dir}"' EXIT
+
+(cd "${PROJECT_ROOT}" && xcodebuild build \
+    -scheme "${SCHEME}" \
+    -destination 'platform=OS X' \
+    -configuration Release \
+    -derivedDataPath "${build_dir}/DerivedData" \
+    -quiet) || die "xcodebuild failed"
+
+RELEASE_DIR="${build_dir}/DerivedData/Build/Products/Release"
+[[ -f "${RELEASE_DIR}/yapper" ]] || die "Built binary not found at ${RELEASE_DIR}/yapper"
+
+# Verify binary runs and reports the expected version
+printf 'Verifying built binary...\n'
+BINARY_VERSION=$("${RELEASE_DIR}/yapper" --version 2>&1 || true)
+[[ "${BINARY_VERSION}" == "${NEW_VERSION}" ]] || die "Binary version mismatch: got '${BINARY_VERSION}', expected '${NEW_VERSION}'"
+printf '  binary --version: %s\n' "${BINARY_VERSION}"
+
+# Verify all expected bundles exist
+for bundle in "${BUNDLE_NAMES[@]}"; do
+    [[ -d "${RELEASE_DIR}/${bundle}" ]] || die "Expected resource bundle missing: ${bundle}"
+done
+
+# 3. Ad-hoc code sign the binary with hardened runtime
+printf '\nAd-hoc signing binary (hardened runtime)...\n'
+codesign --force --sign - --options runtime --timestamp=none "${RELEASE_DIR}/yapper"
+codesign --verify --verbose "${RELEASE_DIR}/yapper" 2>&1 | sed 's/^/  /'
+
+# 4. Stage binary + bundles and tar
+staging="${build_dir}/stage"
+mkdir -p "${staging}"
+cp -- "${RELEASE_DIR}/yapper" "${staging}/"
+for bundle in "${BUNDLE_NAMES[@]}"; do
+    cp -R -- "${RELEASE_DIR}/${bundle}" "${staging}/"
+done
+
+printf '\nCreating %s...\n' "${BINARY_ASSET}"
+binary_tarball="${build_dir}/${BINARY_ASSET}"
+(cd "${staging}" && tar -czf "${binary_tarball}" yapper "${BUNDLE_NAMES[@]}")
+BINARY_SHA256=$(shasum -a 256 "${binary_tarball}" | awk '{print $1}')
+printf '  %s SHA256: %s\n' "${BINARY_ASSET}" "${BINARY_SHA256}"
+
+# 5. Commit, tag, push
 git -C "${PROJECT_ROOT}" add "${VERSION_FILE}"
 git -C "${PROJECT_ROOT}" commit -m "chore: bump version to ${NEW_VERSION}"
 git -C "${PROJECT_ROOT}" tag -a "${TAG}" -m "Release ${NEW_VERSION}"
@@ -74,44 +127,39 @@ printf 'Pushing to origin...\n'
 git -C "${PROJECT_ROOT}" push
 git -C "${PROJECT_ROOT}" push origin "${TAG}"
 
-# 3. Create GitHub release for the code tag
+# 6. Create GitHub release with the binary tarball
+BINARY_URL="https://github.com/tigger04/yapper/releases/download/${TAG}/${BINARY_ASSET}"
 printf 'Creating GitHub release %s...\n' "${TAG}"
 gh release create "${TAG}" \
+    "${binary_tarball}" \
     --repo tigger04/yapper \
     --title "Yapper ${NEW_VERSION}" \
-    --notes "Yapper ${NEW_VERSION} — see CHANGELOG or git log for details.
+    --notes "Yapper ${NEW_VERSION} — prebuilt macOS arm64 binary.
 
 Install via Homebrew:
 \`\`\`
 brew tap tigger04/tap
 brew install yapper
-\`\`\`"
+\`\`\`
 
-# 4. Compute SHA256 of source tarball
-TARBALL_URL="https://github.com/tigger04/yapper/archive/refs/tags/${TAG}.tar.gz"
-tmp_release=$(mktemp -d)
-trap 'rm -rf -- "${tmp_release}"' EXIT
+The tarball contains the ad-hoc signed \`yapper\` binary and its required Swift resource bundles. See \`scripts/release.sh\` for how it was built and packaged."
 
-printf 'Downloading source tarball...\n'
-curl -sL "${TARBALL_URL}" -o "${tmp_release}/source.tar.gz"
-SOURCE_SHA256=$(shasum -a 256 "${tmp_release}/source.tar.gz" | awk '{print $1}')
-printf '  source SHA256: %s\n' "${SOURCE_SHA256}"
-
-# 5. Load model/voices SHA256 from manifest
+# 7. Load model/voices SHA256 from manifest
 MODEL_URL=$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['model']['url'])")
 MODEL_SHA=$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['model']['sha256'])")
 VOICES_URL=$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['voices']['url'])")
 VOICES_SHA=$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['voices']['sha256'])")
 
-# 6. Write formula
+# 8. Write formula (prebuilt binary, no build step)
 mkdir -p "${PROJECT_ROOT}/Formula"
 cat > "${FORMULA_LOCAL}" <<RUBY
 class Yapper < Formula
   desc "Fast, Apple Silicon-native text-to-speech CLI and Swift library"
   homepage "https://github.com/tigger04/yapper"
-  url "${TARBALL_URL}"
-  sha256 "${SOURCE_SHA256}"
+  url "${BINARY_URL}"
+  sha256 "${BINARY_SHA256}"
   license "Apache-2.0"
+  version "${NEW_VERSION}"
 
   depends_on :macos
   depends_on arch: :arm64
@@ -128,26 +176,17 @@ class Yapper < Formula
   end
 
   def install
-    # Pre-resolve Swift package dependencies with Swift's sandbox disabled —
-    # Homebrew's outer sandbox prevents nested sandbox-exec calls, so
-    # xcodebuild's own package resolver fails with
-    #   sandbox-exec: sandbox_apply: Operation not permitted
-    # swift resolve writes to .build/checkouts; -clonedSourcePackagesDirPath
-    # points xcodebuild at that layout so it does not try to resolve again.
-    system "swift", "package", "resolve", "--disable-sandbox"
+    # Prebuilt ad-hoc signed binary and its Swift resource bundles go into libexec;
+    # a thin wrapper script in bin/ execs the real binary so Bundle.main lookups
+    # resolve relative to libexec (where the .bundle directories live).
+    libexec.install "yapper"
+    libexec.install Dir["*.bundle"]
 
-    system "xcodebuild", "build",
-           "-scheme", "yapper",
-           "-destination", "platform=OS X",
-           "-configuration", "Release",
-           "-derivedDataPath", buildpath/".xcode",
-           "-clonedSourcePackagesDirPath", buildpath/".build",
-           "-onlyUsePackageVersionsFromResolvedFile",
-           "-skipPackagePluginValidation"
-
-    built = Dir["#{buildpath}/.xcode/Build/Products/Release/yapper"].first
-    odie "yapper binary not found after build" unless built
-    bin.install built
+    (bin/"yapper").write <<~SH
+      #!/bin/bash
+      exec "#{libexec}/yapper" "\$@"
+    SH
+    (bin/"yapper").chmod 0755
 
     (share/"yapper/models").mkpath
     (share/"yapper/voices").mkpath
@@ -163,13 +202,12 @@ class Yapper < Formula
 
   def caveats
     <<~EOS
-      Yapper builds from source and requires:
-        - Xcode command-line tools (for xcodebuild)
-        - The Metal Toolchain component of Xcode (for MLX shader compilation)
+      Yapper ships as a prebuilt Apple Silicon binary, ad-hoc code signed
+      (not yet notarised — tracked in issue #13).
 
-      Model weights and English voices are downloaded automatically at install time
-      from the tigger04/yapper models-v1 release (Apache 2.0, redistributed from
-      hexgrad/Kokoro-82M). They live in:
+      Model weights and English voices are downloaded automatically at install
+      time from the tigger04/yapper models-v1 release (Apache 2.0, redistributed
+      from hexgrad/Kokoro-82M). They live in:
         #{share}/yapper/models
         #{share}/yapper/voices
 
@@ -191,7 +229,7 @@ git -C "${PROJECT_ROOT}" add "${FORMULA_LOCAL}"
 git -C "${PROJECT_ROOT}" commit -m "chore: update Homebrew formula for ${NEW_VERSION}"
 git -C "${PROJECT_ROOT}" push
 
-# 7. Mirror formula to the tap repo
+# 9. Mirror formula to the tap repo
 printf 'Pushing formula to %s...\n' "${TAP_REPO}"
 b64_file=$(mktemp)
 payload_file=$(mktemp)
@@ -223,5 +261,6 @@ printf '\n=== Release Complete ===\n'
 printf '  Version: %s\n' "${NEW_VERSION}"
 printf '  Tag:     %s\n' "${TAG}"
 printf '  Release: https://github.com/tigger04/yapper/releases/tag/%s\n' "${TAG}"
+printf '  Binary:  %s (%s)\n' "${BINARY_ASSET}" "${BINARY_SHA256:0:16}..."
 printf '  Formula: %s/%s\n\n' "${TAP_REPO}" "${FORMULA_TAP_PATH}"
 printf 'Install with:\n  brew tap tigger04/tap\n  brew install yapper\n'

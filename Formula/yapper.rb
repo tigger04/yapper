@@ -1,9 +1,10 @@
 class Yapper < Formula
   desc "Fast, Apple Silicon-native text-to-speech CLI and Swift library"
   homepage "https://github.com/tigger04/yapper"
-  url "https://github.com/tigger04/yapper/archive/refs/tags/v0.8.0.tar.gz"
-  sha256 "5be5b62b9b4a367d334473c390989ed8a552cebf012d1862aa8ec8501e272f27"
+  url "https://github.com/tigger04/yapper/releases/download/v0.8.1/yapper-macos-arm64.tar.gz"
+  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   license "Apache-2.0"
+  version "0.8.1"
 
   depends_on :macos
   depends_on arch: :arm64
@@ -11,35 +12,26 @@ class Yapper < Formula
 
   resource "model" do
     url "https://github.com/tigger04/yapper/releases/download/models-v1/kokoro-v1_0.safetensors"
-    sha256 "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   end
 
   resource "voices" do
     url "https://github.com/tigger04/yapper/releases/download/models-v1/voices.tar.gz"
-    sha256 "bf273cf082639010bc5e94a5ff19f62c69aa4ded7a0651dc8a3c6d19e855b459"
+    sha256 "0000000000000000000000000000000000000000000000000000000000000000"
   end
 
   def install
-    # Pre-resolve Swift package dependencies with Swift's sandbox disabled —
-    # Homebrew's outer sandbox prevents nested sandbox-exec calls, so
-    # xcodebuild's own package resolver fails with
-    #   sandbox-exec: sandbox_apply: Operation not permitted
-    # swift resolve writes to .build/checkouts; -clonedSourcePackagesDirPath
-    # points xcodebuild at that layout so it does not try to resolve again.
-    system "swift", "package", "resolve", "--disable-sandbox"
+    # Prebuilt ad-hoc signed binary and its Swift resource bundles go into libexec;
+    # a thin wrapper script in bin/ execs the real binary so Bundle.main lookups
+    # resolve relative to libexec (where the .bundle directories live).
+    libexec.install "yapper"
+    libexec.install Dir["*.bundle"]
 
-    system "xcodebuild", "build",
-           "-scheme", "yapper",
-           "-destination", "platform=OS X",
-           "-configuration", "Release",
-           "-derivedDataPath", buildpath/".xcode",
-           "-clonedSourcePackagesDirPath", buildpath/".build",
-           "-onlyUsePackageVersionsFromResolvedFile",
-           "-skipPackagePluginValidation"
-
-    built = Dir["#{buildpath}/.xcode/Build/Products/Release/yapper"].first
-    odie "yapper binary not found after build" unless built
-    bin.install built
+    (bin/"yapper").write <<~SH
+      #!/bin/bash
+      exec "#{libexec}/yapper" "$@"
+    SH
+    (bin/"yapper").chmod 0755
 
     (share/"yapper/models").mkpath
     (share/"yapper/voices").mkpath
@@ -55,13 +47,12 @@ class Yapper < Formula
 
   def caveats
     <<~EOS
-      Yapper builds from source and requires:
-        - Xcode command-line tools (for xcodebuild)
-        - The Metal Toolchain component of Xcode (for MLX shader compilation)
+      Yapper ships as a prebuilt Apple Silicon binary, ad-hoc code signed
+      (not yet notarised — tracked in issue #13).
 
-      Model weights and English voices are downloaded automatically at install time
-      from the tigger04/yapper models-v1 release (Apache 2.0, redistributed from
-      hexgrad/Kokoro-82M). They live in:
+      Model weights and English voices are downloaded automatically at install
+      time from the tigger04/yapper models-v1 release (Apache 2.0, redistributed
+      from hexgrad/Kokoro-82M). They live in:
         #{share}/yapper/models
         #{share}/yapper/voices
 
@@ -72,6 +63,6 @@ class Yapper < Formula
   end
 
   test do
-    assert_match "0.8.0", shell_output("#{bin}/yapper --version")
+    assert_match "0.8.1", shell_output("#{bin}/yapper --version")
   end
 end
