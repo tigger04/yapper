@@ -39,13 +39,17 @@ struct VoicesCommand: ParsableCommand {
         }
 
         // Header
-        print(String(format: "%-14s %-10s %s", "Name", "Accent", "Gender"))
+        print("Name".padding(toLength: 14, withPad: " ", startingAt: 0)
+            + "Accent".padding(toLength: 10, withPad: " ", startingAt: 0)
+            + "Gender")
         print(String(repeating: "-", count: 34))
 
         for voice in voices {
             let accentLabel = voice.accent == .american ? "American" : "British"
             let genderLabel = voice.gender == .female ? "Female" : "Male"
-            print(String(format: "%-14s %-10s %s", voice.name, accentLabel, genderLabel))
+            print(voice.name.padding(toLength: 14, withPad: " ", startingAt: 0)
+                + accentLabel.padding(toLength: 10, withPad: " ", startingAt: 0)
+                + genderLabel)
         }
 
         print("\n\(voices.count) voices available.")

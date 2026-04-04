@@ -45,8 +45,7 @@ install: build ## Install yapper to ~/.local/bin
 		exit 1; \
 	fi
 	@mkdir -p "$(INSTALL_DIR)"
-	@printf '#!/usr/bin/env bash\ncd "%s" && exec ./yapper "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
-	@chmod +x "$(INSTALL_DIR)/yapper"
+	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yapper"
 	@echo "Installed yapper to $(INSTALL_DIR)/yapper"
 
 uninstall: ## Remove yapper from ~/.local/bin

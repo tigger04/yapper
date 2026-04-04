@@ -20,7 +20,9 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift", exact: "0.30.2"),
-        .package(url: "https://github.com/mlalma/MisakiSwift", exact: "1.0.6"),
+        // Using our fork until upstream accepts PR #13 (remove type: .dynamic)
+        // Upstream: https://github.com/mlalma/MisakiSwift
+        .package(url: "https://github.com/tigger04/MisakiSwift", branch: "remove-dynamic-type"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.0"),
     ],
     targets: [
