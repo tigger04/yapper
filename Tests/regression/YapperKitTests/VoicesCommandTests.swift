@@ -73,4 +73,62 @@ struct VoicesCommandTests {
             try VoiceRegistry(voicesPath: tmpDir)
         }
     }
+
+    // RT-5.7: Preview with missing voice file produces error mentioning voice name
+    @Test("RT-5.7: missing voice file produces error")
+    func test_voices_missing_file_RT5_7() throws {
+        // Create a temp dir with a voice file, then delete it
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper_missing_voice_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        // Copy a real voice, create registry, then delete the file
+        let src = Self.voicesPath.appendingPathComponent("af_heart.safetensors")
+        let dst = tmpDir.appendingPathComponent("af_heart.safetensors")
+        try FileManager.default.copyItem(at: src, to: dst)
+
+        let registry = try VoiceRegistry(voicesPath: tmpDir)
+        #expect(registry.voices.count == 1)
+
+        // Delete the file after registry was created
+        try FileManager.default.removeItem(at: dst)
+
+        // Loading should fail
+        do {
+            _ = try registry.load(name: "af_heart")
+            Issue.record("Expected error loading deleted voice file")
+        } catch {
+            let errorMsg = "\(error)"
+            #expect(errorMsg.contains("af_heart") || errorMsg.contains("not found") || errorMsg.contains("voicesNotFound"))
+        }
+    }
+
+    // RT-5.8: Voice still appears in list but preview fails gracefully
+    @Test("RT-5.8: deleted voice still listed but load fails")
+    func test_voices_deleted_still_listed_RT5_8() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper_deleted_voice_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let src = Self.voicesPath.appendingPathComponent("af_heart.safetensors")
+        let dst = tmpDir.appendingPathComponent("af_heart.safetensors")
+        try FileManager.default.copyItem(at: src, to: dst)
+
+        let registry = try VoiceRegistry(voicesPath: tmpDir)
+        // Voice is in the list
+        #expect(registry.voices.contains { $0.name == "af_heart" })
+
+        // Delete file
+        try FileManager.default.removeItem(at: dst)
+
+        // Still in list (registry was built at init)
+        #expect(registry.voices.contains { $0.name == "af_heart" })
+
+        // But loading fails
+        #expect(throws: (any Error).self) {
+            try registry.load(name: "af_heart")
+        }
+    }
 }
