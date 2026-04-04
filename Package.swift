@@ -48,5 +48,10 @@ let package = Package(
             dependencies: ["YapperKit"],
             path: "Tests/regression/YapperKitTests"
         ),
+        .testTarget(
+            name: "YapperOneOffTests",
+            dependencies: ["YapperKit"],
+            path: "Tests/one_off"
+        ),
     ]
 )
