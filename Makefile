@@ -79,7 +79,10 @@ install: build ## Install yapper to ~/.local/bin
 		exit 1; \
 	fi
 	@mkdir -p "$(INSTALL_DIR)"
-	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yapper"
+	@# Remove any existing symlink to prevent following it into DerivedData
+	@if [ -L "$(INSTALL_DIR)/yapper" ]; then rm "$(INSTALL_DIR)/yapper"; fi
+	@printf '#!/usr/bin/env bash\nexec "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
+	@chmod +x "$(INSTALL_DIR)/yapper"
 	@echo "Installed yapper to $(INSTALL_DIR)/yapper"
 
 uninstall: ## Remove yapper from ~/.local/bin

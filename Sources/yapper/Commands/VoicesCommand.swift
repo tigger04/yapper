@@ -2,6 +2,7 @@
 // ABOUTME: Displays voice metadata in a formatted table.
 
 import ArgumentParser
+import AVFoundation
 import Foundation
 import YapperKit
 
@@ -62,25 +63,38 @@ struct VoicesCommand: ParsableCommand {
         }
 
         let sampleText = "Hello, this is the \(name) voice."
-        let player = AudioPlayer()
+        let result = try engine.synthesize(text: sampleText, voice: voice, speed: 1.0)
+
+        let tmpPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper_preview_\(ProcessInfo.processInfo.processIdentifier).wav")
+        try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: tmpPath)
+        defer { try? FileManager.default.removeItem(at: tmpPath) }
 
         signal(SIGINT) { _ in _exit(130) }
 
-        var started = false
-        try engine.stream(text: sampleText, voice: voice, speed: 1.0) { chunk in
-            try? player.scheduleBuffer(chunk.samples)
-            if !started {
-                try? player.play()
-                started = true
-            }
-        }
+        let afplay = Process()
+        afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+        afplay.arguments = [tmpPath.path]
+        try afplay.run()
+        afplay.waitUntilExit()
+    }
 
-        if !started, player.state == .idle {
-            try player.play()
+    private func writeWav(samples: [Float], sampleRate: Int, to url: URL) throws {
+        let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: Double(sampleRate),
+            channels: 1,
+            interleaved: false
+        )!
+        let frameCount = AVAudioFrameCount(samples.count)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw ValidationError("Failed to create audio buffer")
         }
-
-        while player.state == .playing {
-            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
+        buffer.frameLength = frameCount
+        samples.withUnsafeBufferPointer { src in
+            buffer.floatChannelData![0].update(from: src.baseAddress!, count: samples.count)
         }
+        let file = try AVAudioFile(forWriting: url, settings: format.settings)
+        try file.write(from: buffer)
     }
 }
