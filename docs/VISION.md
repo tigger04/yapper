@@ -96,6 +96,14 @@ cat document.txt | yapper speak
 cat document.txt | yapper convert -o output.mp3
 ```
 
+#### UC5: Pronunciation customization
+
+User-defined lexicon overrides for names, technical terms, and words the G2P mispronounces.
+
+- **Inline:** `yapper speak "Hello [Tadg](/tæːɡ/)"` - MisakiSwift's markdown-like syntax for one-off corrections
+- **User dictionary:** `~/.config/yapper/dictionary.txt` - persistent overrides applied automatically, one entry per line: `word /phonemes/`
+- **Per-project:** `.yapper-dictionary` in the working directory, merged with the user dictionary
+
 ### Phase 2 - Extended CLI
 
 #### UC5: Clipboard reader
@@ -121,7 +129,6 @@ Key requirements for this use case:
 
 ### Future considerations
 
-- Pronunciation customization - user-defined lexicon overrides for names, technical terms, and words the G2P mispronounces. MisakiSwift supports inline overrides via `[word](/phonemes/)` syntax; a persistent user dictionary is planned.
 - iOS support - YapperKit is portable to iOS 18+ (all dependencies support it). The CLI is macOS-only but the library layer has no macOS-specific APIs.
 - GUI wrapper (macOS native, and potentially iOS/iPadOS)
 - Voice cloning / custom voice training

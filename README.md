@@ -45,11 +45,10 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 - CLI commands (`speak`, `voices`, `convert`)
 - Document conversion (epub, PDF, docx, odt, markdown, HTML, mobi)
 - Audiobook generation with chapter markers (M4B) and per-chapter voice assignment
+- Pronunciation customization (user dictionary, Irish names!, per-project overrides)
 - Clipboard and screen selection reading
 
 **Planned:**
-
-- Pronunciation customization (lexicon overrides for names, technical terms, etc.)
 - iOS support (YapperKit is portable - no macOS-specific APIs)
 - Homebrew formula
 - GUI wrapper
