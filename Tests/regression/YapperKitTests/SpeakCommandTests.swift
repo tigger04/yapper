@@ -149,95 +149,56 @@ struct SpeakCommandTests {
 
 // MARK: - Issue #15: voice selection precedence + --dry-run
 //
-// These tests exercise the CLI boundary (argument parsing, environment
-// variables, and the --dry-run output contract) by spawning the yapper
-// binary as a subprocess. The unit under test is SpeakCommand's resolution
-// logic, which only behaves correctly at the process boundary — in-process
-// calls to engine.synthesize() bypass all of it.
+// PREVIOUS VERSION OF THIS SUITE WAS DELETED AND REWRITTEN FROM SCRATCH.
+//
+// The deleted version spawned the yapper binary directly from DerivedData,
+// bypassing the bin/yapper wrapper script that the real install topology
+// places between the user and libexec/yapper. That's the specific flaw that
+// allowed v0.8.4 to ship with broken MLX metallib lookup — the tests passed
+// because they never exercised the wrapper/install path. The deleted version
+// also relied exclusively on --dry-run, which deliberately bypasses the
+// 327MB model load and would not have surfaced the MLX failure in any case.
+//
+// The rewrite uses a shared `YapperProcessHarness` (defined in
+// YapperProcessHarness.swift) that constructs a throwaway install prefix
+// matching the real layout — bin/yapper and bin/yap as wrapper scripts,
+// libexec/yapper as the real binary, resource bundles next to libexec/yapper
+// — and invokes every test subject through bin/yapper. At least one test
+// (RT-15.13) performs real synthesis via `yapper convert` so that MLX is
+// forced to load its metallib via Bundle.main — this is the test that would
+// have caught v0.8.4 on day one.
+//
+// The --dry-run tests are still present because they validate voice
+// resolution cheaply (no model load) AND now also exercise the wrapper
+// path, so they catch both the resolution logic and half of the install
+// topology. The real-synthesis test covers the other half.
 
-/// Result of invoking the yapper binary in a subprocess.
-private struct YapperRun {
-    let stdout: String
-    let stderr: String
-    let exitCode: Int32
-}
-
-/// Locate the yapper binary in DerivedData (same path make install resolves).
-private func yapperBinaryPath() throws -> URL {
-    let derivedData = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent("Library/Developer/Xcode/DerivedData")
-    let fm = FileManager.default
-    let entries = (try? fm.contentsOfDirectory(atPath: derivedData.path)) ?? []
-    for entry in entries where entry.hasPrefix("yapper-") {
-        let candidate = derivedData
-            .appendingPathComponent(entry)
-            .appendingPathComponent("Build/Products/Debug/yapper")
-        if fm.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-    }
-    throw NSError(
-        domain: "YapperTests",
-        code: 1,
-        userInfo: [NSLocalizedDescriptionKey: "yapper binary not found under DerivedData — run 'make build' first"]
-    )
-}
-
-/// Spawn the yapper binary with the given args and environment. Returns stdout, stderr, exit code.
-/// Only sets the environment variables explicitly specified; inherits the rest from the parent
-/// process (so the binary can find its dylibs, frameworks, etc.).
-private func runYapper(args: [String], env: [String: String] = [:]) throws -> YapperRun {
-    let binary = try yapperBinaryPath()
-    let proc = Process()
-    proc.executableURL = binary
-    proc.arguments = args
-
-    // Merge: start from parent env, overlay caller's overrides, and explicitly
-    // delete YAPPER_VOICE if the caller didn't set it (so tests don't leak each other's state).
-    var environment = ProcessInfo.processInfo.environment
-    environment["YAPPER_VOICE"] = nil
-    for (k, v) in env { environment[k] = v }
-    proc.environment = environment
-
-    let stdoutPipe = Pipe()
-    let stderrPipe = Pipe()
-    proc.standardOutput = stdoutPipe
-    proc.standardError = stderrPipe
-
-    try proc.run()
-    proc.waitUntilExit()
-
-    let out = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    let err = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-    return YapperRun(stdout: out, stderr: err, exitCode: proc.terminationStatus)
-}
-
-/// Extract the resolved voice name from a --dry-run stdout. Returns nil if the output
-/// is malformed or no voice line is present.
-private func parseDryRunVoice(_ stdout: String) -> String? {
-    for line in stdout.split(separator: "\n") {
-        let trimmed = line.trimmingCharacters(in: .whitespaces)
-        if trimmed.hasPrefix("voice:") {
-            let value = trimmed.dropFirst("voice:".count).trimmingCharacters(in: .whitespaces)
-            return value.isEmpty ? nil : value
-        }
-    }
-    return nil
-}
-
-@Suite("Issue #15 voice selection precedence + --dry-run")
+@Suite("Issue #15 voice selection precedence + --dry-run", .serialized)
 struct VoiceSelectionPrecedenceTests {
+
+    // `nonisolated(unsafe)` matches the pattern used by SpeakCommandTests.engine —
+    // the harness is constructed once, all tests in the suite run serially
+    // (@Suite(.serialized)), and it's only torn down on process exit.
+    private nonisolated(unsafe) static let harness: YapperProcessHarness = {
+        do {
+            return try YapperProcessHarness()
+        } catch {
+            fatalError("Failed to construct YapperProcessHarness: \(error)")
+        }
+    }()
 
     // AC15.1: Random selection when no override
     //
-    // RT-15.1: Over 10 invocations with no override, at least 3 distinct voices appear.
+    // RT-15.1: Over 10 invocations with no override, at least 3 distinct voices appear in stdout.
+    // Invokes bin/yapper via wrapper, parses --dry-run output.
     @Test("RT-15.1: random selection produces multiple distinct voices over 10 runs")
     func test_random_distinct_over_runs_RT15_1() throws {
         var voices: Set<String> = []
         for _ in 0..<10 {
-            let run = try runYapper(args: ["speak", "--dry-run", "test"])
-            #expect(run.exitCode == 0)
-            if let voice = parseDryRunVoice(run.stdout) {
+            let run = try Self.harness.runYapper(args: ["speak", "--dry-run", "test"])
+            #expect(run.exitCode == 0,
+                    "yapper speak --dry-run failed: stdout=\(run.stdout) stderr=\(run.stderr)")
+            if let voice = YapperProcessHarness.parseDryRunVoice(run.stdout) {
                 voices.insert(voice)
             }
         }
@@ -248,7 +209,6 @@ struct VoiceSelectionPrecedenceTests {
     // RT-15.2: Each random selection returns a voice that exists in the registry.
     @Test("RT-15.2: every random selection reports a real voice name")
     func test_random_voice_exists_RT15_2() throws {
-        // Build the authoritative voice list via a direct registry construction.
         let voicesPath = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".local/share/yapper/voices")
         let registry = try VoiceRegistry(voicesPath: voicesPath)
@@ -256,13 +216,13 @@ struct VoiceSelectionPrecedenceTests {
         #expect(!knownNames.isEmpty)
 
         for _ in 0..<5 {
-            let run = try runYapper(args: ["speak", "--dry-run", "test"])
+            let run = try Self.harness.runYapper(args: ["speak", "--dry-run", "test"])
             #expect(run.exitCode == 0)
-            let selected = parseDryRunVoice(run.stdout)
+            let selected = YapperProcessHarness.parseDryRunVoice(run.stdout)
             #expect(selected != nil, "Dry-run output missing voice line: \(run.stdout)")
             if let selected {
                 #expect(knownNames.contains(selected),
-                        "Selected voice '\(selected)' not in registry (\(knownNames.count) voices)")
+                        "Selected voice '\(selected)' not in registry")
             }
         }
     }
@@ -272,20 +232,20 @@ struct VoiceSelectionPrecedenceTests {
     // RT-15.3: --voice works with env var unset.
     @Test("RT-15.3: --voice flag selects the requested voice (env var unset)")
     func test_voice_flag_wins_no_env_RT15_3() throws {
-        let run = try runYapper(args: ["speak", "--voice", "af_heart", "--dry-run", "test"])
+        let run = try Self.harness.runYapper(args: ["speak", "--voice", "af_heart", "--dry-run", "test"])
         #expect(run.exitCode == 0)
-        #expect(parseDryRunVoice(run.stdout) == "af_heart")
+        #expect(YapperProcessHarness.parseDryRunVoice(run.stdout) == "af_heart")
     }
 
     // RT-15.4: --voice flag wins when YAPPER_VOICE also set.
     @Test("RT-15.4: --voice flag wins over $YAPPER_VOICE")
     func test_voice_flag_wins_over_env_RT15_4() throws {
-        let run = try runYapper(
+        let run = try Self.harness.runYapper(
             args: ["speak", "--voice", "bf_emma", "--dry-run", "test"],
             env: ["YAPPER_VOICE": "am_adam"]
         )
         #expect(run.exitCode == 0)
-        #expect(parseDryRunVoice(run.stdout) == "bf_emma")
+        #expect(YapperProcessHarness.parseDryRunVoice(run.stdout) == "bf_emma")
     }
 
     // AC15.3: $YAPPER_VOICE selects a valid voice when --voice is not passed
@@ -293,24 +253,24 @@ struct VoiceSelectionPrecedenceTests {
     // RT-15.5: env var selects its voice.
     @Test("RT-15.5: $YAPPER_VOICE selects its voice when --voice is absent")
     func test_env_var_selects_voice_RT15_5() throws {
-        let run = try runYapper(
+        let run = try Self.harness.runYapper(
             args: ["speak", "--dry-run", "test"],
             env: ["YAPPER_VOICE": "bm_daniel"]
         )
         #expect(run.exitCode == 0)
-        #expect(parseDryRunVoice(run.stdout) == "bm_daniel")
+        #expect(YapperProcessHarness.parseDryRunVoice(run.stdout) == "bm_daniel")
     }
 
-    // RT-15.6: Two invocations with the same env var report the same voice (no random drift).
+    // RT-15.6: Two invocations with the same env var report the same voice.
     @Test("RT-15.6: repeated invocations with same $YAPPER_VOICE are consistent")
     func test_env_var_consistent_RT15_6() throws {
         let env = ["YAPPER_VOICE": "am_michael"]
-        let a = try runYapper(args: ["speak", "--dry-run", "test"], env: env)
-        let b = try runYapper(args: ["speak", "--dry-run", "test"], env: env)
+        let a = try Self.harness.runYapper(args: ["speak", "--dry-run", "test"], env: env)
+        let b = try Self.harness.runYapper(args: ["speak", "--dry-run", "test"], env: env)
         #expect(a.exitCode == 0)
         #expect(b.exitCode == 0)
-        #expect(parseDryRunVoice(a.stdout) == "am_michael")
-        #expect(parseDryRunVoice(b.stdout) == "am_michael")
+        #expect(YapperProcessHarness.parseDryRunVoice(a.stdout) == "am_michael")
+        #expect(YapperProcessHarness.parseDryRunVoice(b.stdout) == "am_michael")
     }
 
     // AC15.4: Invalid $YAPPER_VOICE produces a clear error
@@ -318,7 +278,7 @@ struct VoiceSelectionPrecedenceTests {
     // RT-15.7: Invalid env var exits non-zero.
     @Test("RT-15.7: invalid $YAPPER_VOICE exits non-zero")
     func test_invalid_env_var_nonzero_RT15_7() throws {
-        let run = try runYapper(
+        let run = try Self.harness.runYapper(
             args: ["speak", "--dry-run", "test"],
             env: ["YAPPER_VOICE": "nonexistent_voice_xyz"]
         )
@@ -328,7 +288,7 @@ struct VoiceSelectionPrecedenceTests {
     // RT-15.8: Error message identifies the invalid name and the source ($YAPPER_VOICE).
     @Test("RT-15.8: invalid $YAPPER_VOICE error message identifies the voice and source")
     func test_invalid_env_var_error_message_RT15_8() throws {
-        let run = try runYapper(
+        let run = try Self.harness.runYapper(
             args: ["speak", "--dry-run", "test"],
             env: ["YAPPER_VOICE": "nonexistent_voice_xyz"]
         )
@@ -345,6 +305,10 @@ struct VoiceSelectionPrecedenceTests {
     // AC15.5: No hardcoded voice name fallback
     //
     // RT-15.9: SpeakCommand.resolveVoice() contains no hardcoded voice-name literal as a fallback.
+    // This is a source-level structural guard against the pre-#15 behaviour being accidentally
+    // reintroduced. It's the one test in the suite that doesn't invoke the binary — it's checking
+    // that a specific antipattern is absent from the source, which can only be verified at the
+    // source level. Kept because it catches regressions earlier than a runtime test would.
     @Test("RT-15.9: SpeakCommand.resolveVoice has no hardcoded voice name fallback")
     func test_no_hardcoded_fallback_RT15_9() throws {
         let projectRoot = URL(fileURLWithPath: #filePath)
@@ -356,22 +320,16 @@ struct VoiceSelectionPrecedenceTests {
             .appendingPathComponent("Sources/yapper/Commands/SpeakCommand.swift")
         let source = try String(contentsOf: speakSource, encoding: .utf8)
 
-        // Extract the resolveVoice function body and verify it contains no
-        // literal voice-name patterns (e.g. "af_heart", "bm_daniel") used as
-        // a fallback. The function should now only reference the
-        // --voice flag value, the env var, or registry.randomSystem().
         guard let resolveStart = source.range(of: "private func resolveVoice(") else {
             #expect(Bool(false), "resolveVoice function not found in SpeakCommand.swift")
             return
         }
-        // Grab the next ~2000 characters as a generous window covering the function body
         let windowEnd = source.index(resolveStart.lowerBound,
                                      offsetBy: 2000,
                                      limitedBy: source.endIndex) ?? source.endIndex
         let functionWindow = String(source[resolveStart.lowerBound..<windowEnd])
 
         // Voice-name pattern: [abfejhpz][fm]_[a-z]+ (e.g. af_heart, bm_daniel, em_alex).
-        // If any such literal appears inside the function window, it's a hardcoded fallback.
         let pattern = #""[abfejhpz][fm]_[a-z]+""#
         let regex = try NSRegularExpression(pattern: pattern)
         let matches = regex.numberOfMatches(
@@ -384,46 +342,79 @@ struct VoiceSelectionPrecedenceTests {
 
     // AC15.6: --dry-run flag
     //
-    // RT-15.10: --dry-run exits 0 and reports a voice line.
+    // RT-15.10: --dry-run exits 0 and reports a voice line via the installed wrapper.
     @Test("RT-15.10: --dry-run prints a voice: line on stdout and exits 0")
     func test_dry_run_voice_line_RT15_10() throws {
-        let run = try runYapper(args: ["speak", "--dry-run", "hello"])
+        let run = try Self.harness.runYapper(args: ["speak", "--dry-run", "hello"])
         #expect(run.exitCode == 0)
-        let voice = parseDryRunVoice(run.stdout)
-        #expect(voice != nil, "Dry-run output must contain a 'voice:' line")
+        #expect(YapperProcessHarness.parseDryRunVoice(run.stdout) != nil,
+                "Dry-run output must contain a 'voice:' line")
     }
 
-    // RT-15.11: --dry-run does not produce audio side effects.
+    // RT-15.11: --dry-run does not produce audio side effects (no WAV in temp dir).
     @Test("RT-15.11: --dry-run writes no WAV files and invokes no audio player")
     func test_dry_run_no_side_effects_RT15_11() throws {
-        // Count yapper_speak_*.wav files in the temp directory before and after.
         let tmp = FileManager.default.temporaryDirectory
         let fm = FileManager.default
         let before = Set((try? fm.contentsOfDirectory(atPath: tmp.path)) ?? [])
             .filter { $0.hasPrefix("yapper_speak_") }
 
-        let run = try runYapper(args: ["speak", "--dry-run", "test"])
+        let run = try Self.harness.runYapper(args: ["speak", "--dry-run", "test"])
         #expect(run.exitCode == 0)
 
         let after = Set((try? fm.contentsOfDirectory(atPath: tmp.path)) ?? [])
             .filter { $0.hasPrefix("yapper_speak_") }
-
-        // Any new files would indicate synthesis/playback side effects.
         let created = after.subtracting(before)
         #expect(created.isEmpty,
                 "Dry-run must not write WAV temp files, but created: \(created)")
     }
 
-    // RT-15.12: --dry-run output includes speed and text lines.
+    // RT-15.12: --dry-run output includes voice, speed, and text fields.
     @Test("RT-15.12: --dry-run output includes voice, speed, and text fields")
     func test_dry_run_format_RT15_12() throws {
-        let run = try runYapper(args: ["speak", "--speed", "1.5", "--dry-run", "the quick brown fox"])
+        let run = try Self.harness.runYapper(
+            args: ["speak", "--speed", "1.5", "--dry-run", "the quick brown fox"]
+        )
         #expect(run.exitCode == 0)
         #expect(run.stdout.contains("voice:"))
         #expect(run.stdout.contains("speed:"))
         #expect(run.stdout.contains("text:"))
-        #expect(run.stdout.contains("1.5"), "speed value should appear in output")
-        #expect(run.stdout.contains("the quick brown fox"), "text value should appear in output")
-        #expect(run.stdout.contains("(dry run"), "advisory line should appear in output")
+        #expect(run.stdout.contains("1.5"))
+        #expect(run.stdout.contains("the quick brown fox"))
+        #expect(run.stdout.contains("(dry run"))
+    }
+
+    // RT-15.13: REAL synthesis via the installed wrapper.
+    //
+    // This is the test that would have caught v0.8.4 on day one. It goes through
+    // the exact install topology (bin/yapper wrapper → libexec/yapper) and
+    // performs actual MLX synthesis, forcing Bundle.main.bundleURL resolution
+    // and metallib load. Uses `yapper convert` (file-based) so no audio is
+    // played during the test run.
+    @Test("RT-15.13: real synthesis through bin/yapper wrapper loads MLX and produces audio file")
+    func test_real_synthesis_via_wrapper_RT15_13() throws {
+        let tmp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper-rt15-13-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmp) }
+
+        let inputTxt = tmp.appendingPathComponent("input.txt")
+        try "Smoke test for regression.".write(to: inputTxt, atomically: true, encoding: .utf8)
+
+        let outputM4a = tmp.appendingPathComponent("output.m4a")
+
+        let run = try Self.harness.runYapper(args: [
+            "convert", inputTxt.path, "-o", outputM4a.path, "--voice", "af_heart"
+        ])
+
+        #expect(run.exitCode == 0,
+                "yapper convert via wrapper failed. stdout=\(run.stdout) stderr=\(run.stderr)")
+        #expect(FileManager.default.fileExists(atPath: outputM4a.path),
+                "yapper convert did not produce an output file — MLX metallib load probably failed")
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: outputM4a.path)
+        let size = (attrs[.size] as? Int) ?? 0
+        #expect(size > 1024,
+                "Output file is suspiciously small (\(size) bytes) — synthesis may have failed silently")
     }
 }

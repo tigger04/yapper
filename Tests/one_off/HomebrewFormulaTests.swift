@@ -271,138 +271,17 @@ struct HomebrewFormulaTests {
     // Gatekeeper path is exercised in UT-13.2 and UT-13.3.
 }
 
-@Suite("Issue #14 yap shortcut")
-struct YapShortcutTests {
-
-    private static let projectRoot: URL = {
-        var url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        for _ in 0..<6 {
-            if FileManager.default.fileExists(atPath: url.appendingPathComponent("Package.swift").path) {
-                return url
-            }
-            url.deleteLastPathComponent()
-        }
-        return URL(fileURLWithPath: "/Users/tigger/code/tigoss/yapper")
-    }()
-
-    private static func read(_ relativePath: String) throws -> String {
-        let url = projectRoot.appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    // OT-14.1: Formula install block creates a bin/yap wrapper that execs libexec/yapper
-    // with argv[0]="yap" (via `exec -a`), so the binary's argv[0] dispatch routes to
-    // the speak subcommand. Wrapper, NOT symlink — symlinks break Bundle.main.bundleURL
-    // resolution on modern macOS, causing MLX to fail to find its metallib.
-    @Test("OT-14.1: formula install block creates bin/yap as exec -a wrapper")
-    func formulaInstallsYapWrapper() throws {
-        let formula = try Self.read("Formula/yapper.rb")
-        #expect(formula.contains("(bin/\"yap\").write"),
-                "Formula must write a bin/yap wrapper script")
-        #expect(formula.contains("exec -a yap"),
-                "Formula's yap wrapper must use 'exec -a yap' to set argv[0] for the Swift dispatch")
-        #expect(!formula.contains("bin.install_symlink libexec/\"yapper\" => \"yap\""),
-                "Formula must NOT use install_symlink for yap — symlinks break Bundle.main.bundleURL and MLX metallib lookup")
-
-        let release = try Self.read("scripts/release.sh")
-        #expect(release.contains("(bin/\"yap\").write"),
-                "release.sh heredoc must generate a bin/yap wrapper script")
-        #expect(release.contains("exec -a yap"),
-                "release.sh heredoc must use 'exec -a yap' in the yap wrapper")
-    }
-
-    // OT-14.2: Formula keeps the #11-style wrapper for bin/yapper so Bundle.main.bundleURL
-    // resolves to libexec/ and MLX can find its metallib. Attempting to retire the wrapper
-    // (#14 v0.8.4 did this and broke synthesis) is explicitly disallowed.
-    @Test("OT-14.2: formula keeps bin/yapper wrapper script (do not retire)")
-    func formulaKeepsYapperWrapper() throws {
-        let formula = try Self.read("Formula/yapper.rb")
-        #expect(formula.contains("(bin/\"yapper\").write"),
-                "Formula must keep the bin/yapper wrapper script — symlinks break MLX metallib lookup")
-        #expect(formula.contains("exec \"#{libexec}/yapper\""),
-                "bin/yapper wrapper must exec libexec/yapper so _NSGetExecutablePath resolves to libexec/")
-
-        let release = try Self.read("scripts/release.sh")
-        #expect(release.contains("(bin/\"yapper\").write"),
-                "release.sh heredoc must keep the bin/yapper wrapper script")
-    }
-
-    // OT-14.3: Yapper.swift inspects argv[0] and rewrites args when invoked as yap
-    @Test("OT-14.3: Yapper.swift argv[0] dispatch recognises yap")
-    func yapperSwiftDispatchesYap() throws {
-        let source = try Self.read("Sources/yapper/Yapper.swift")
-        #expect(source.contains("CommandLine.arguments"),
-                "Yapper.swift must inspect CommandLine.arguments for invocation-name dispatch")
-        #expect(source.contains("\"yap\""),
-                "Yapper.swift must compare against the literal yap name")
-        #expect(source.contains("\"speak\""),
-                "Yapper.swift must inject speak into the rewritten argument list")
-        #expect(source.contains("YapperCLI.main("),
-                "Yapper.swift must dispatch via YapperCLI.main(_:) with an explicit argument array")
-    }
-
-    // OT-14.4: Basename comparison is case-insensitive
-    @Test("OT-14.4: yap basename comparison is case-insensitive")
-    func yapBasenameCaseInsensitive() throws {
-        let source = try Self.read("Sources/yapper/Yapper.swift")
-        #expect(source.contains("lowercased()"),
-                "Yapper.swift must lowercase the invocation basename before comparison")
-    }
-
-    // OT-14.5: Makefile install target writes wrapper scripts for both yapper and yap.
-    // Must NOT use symlinks (Bundle.main.bundleURL does not resolve through symlinks on
-    // modern macOS — v0.8.4 shipped with ln -sf and was broken).
-    @Test("OT-14.5: Makefile install writes yapper and yap wrapper scripts (not symlinks)")
-    func makefileInstallsWrappers() throws {
-        let makefile = try Self.read("Makefile")
-        #expect(makefile.contains("INSTALL_DIR)/yapper"),
-                "Makefile install must install bin/yapper")
-        #expect(makefile.contains("INSTALL_DIR)/yap\""),
-                "Makefile install must install bin/yap")
-        #expect(makefile.contains("exec -a yap"),
-                "Makefile's yap wrapper must use 'exec -a yap' to set argv[0] for the Swift dispatch")
-        #expect(!makefile.contains("ln -sf \"$(PRODDIR)/yapper\" \"$(INSTALL_DIR)/yap\""),
-                "Makefile must NOT use ln -sf for yap — symlinks break Bundle.main.bundleURL and MLX metallib lookup")
-    }
-
-    // OT-14.6: Makefile uninstall removes both
-    @Test("OT-14.6: Makefile uninstall removes both yapper and yap")
-    func makefileUninstallsBoth() throws {
-        let makefile = try Self.read("Makefile")
-        #expect(makefile.contains("$(INSTALL_DIR)/yapper") && makefile.contains("$(INSTALL_DIR)/yap"),
-                "Makefile uninstall must remove both symlinks")
-    }
-
-    // OT-14.7: README Quickstart uses yap as the primary introductory command
-    @Test("OT-14.7: README uses yap as the headline example")
-    func readmeUsesYapAsHeadline() throws {
-        let readme = try Self.read("README.md")
-        // The very first code example should start with `yap "..."`, not `yapper speak "..."`
-        guard let firstCodeBlockStart = readme.range(of: "```bash") else {
-            #expect(Bool(false), "README must contain at least one bash code block")
-            return
-        }
-        let end = readme.index(firstCodeBlockStart.upperBound,
-                               offsetBy: 300,
-                               limitedBy: readme.endIndex) ?? readme.endIndex
-        let firstBlock = String(readme[firstCodeBlockStart.lowerBound..<end])
-        #expect(firstBlock.contains("yap \""),
-                "First code block in README must contain a `yap \"…\"` example")
-    }
-
-    // OT-14.8: README explains that yap is shorthand for yapper speak
-    @Test("OT-14.8: README explains yap shorthand")
-    func readmeExplainsShorthand() throws {
-        let readme = try Self.read("README.md")
-        let lower = readme.lowercased()
-        // Look for an explanatory phrase — don't over-specify wording
-        let hasShorthandExplanation =
-            lower.contains("shorthand for") ||
-            lower.contains("shortcut for") ||
-            lower.contains("alias for") ||
-            lower.contains("equivalent to `yapper speak") ||
-            (lower.contains("yap") && lower.contains("same as `yapper speak"))
-        #expect(hasShorthandExplanation,
-                "README must explain that yap is shorthand/alias/equivalent for yapper speak")
-    }
-}
+// Issue #14 yap shortcut tests:
+//   OT-14.1 through OT-14.8 DELETED from this suite 2026-04-05. They were
+//   static grep checks on Formula/yapper.rb, scripts/release.sh,
+//   Sources/yapper/Yapper.swift, Makefile, and README.md. None of them
+//   invoked the yapper binary. They gave false confidence: v0.8.4 passed
+//   every one of these tests while shipping a broken install topology.
+//
+// Replacement tests: RT-14.1, RT-14.2, RT-14.3 in
+// Tests/regression/YapperKitTests/YapShortcutTests.swift, which invoke the
+// real bin/yap wrapper via YapperProcessHarness — the same harness as the
+// rewritten RT-15.x suite.
+//
+// Per TESTING.md §"Never renumber", OT-14.1–14.8 IDs are preserved as
+// 🚫 removed on issue #14's AC table. They are not recycled.
