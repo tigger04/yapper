@@ -10,7 +10,7 @@ public class VoiceRegistry {
     /// All available voices, sorted by name.
     public let voices: [Voice]
 
-    private let voicesPath: URL
+    public let voicesPath: URL
     private var cache: [String: MLXArray] = [:]
 
     /// Initialise the registry by scanning a directory for voice .safetensors files.
@@ -61,6 +61,18 @@ public class VoiceRegistry {
         // Deterministic selection: use seed to pick an index
         let index = Int(seed % UInt64(candidates.count))
         return candidates[index]
+    }
+
+    /// Select a non-deterministically random voice, optionally filtered.
+    ///
+    /// Unlike `random(filter:seed:)`, this uses the system random number generator
+    /// and produces a different result each call. Used by `yapper speak` as the
+    /// default fallback when no voice has been pinned via --voice or $YAPPER_VOICE.
+    ///
+    /// - Parameter filter: Optional filter to constrain selection
+    /// - Returns: A random voice from the filtered set, or nil if the set is empty
+    public func randomSystem(filter: VoiceFilter? = nil) -> Voice? {
+        list(filter: filter).randomElement()
     }
 
     /// Load the MLXArray embedding for a voice.

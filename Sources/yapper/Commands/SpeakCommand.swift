@@ -21,14 +21,29 @@ struct SpeakCommand: ParsableCommand {
     @Option(name: .long, help: "Speech speed multiplier (default: 1.0).")
     var speed: Float = 1.0
 
+    @Flag(name: .long, help: "Print resolved voice, speed, and text without performing synthesis.")
+    var dryRun: Bool = false
+
     func run() throws {
         let inputText = try resolveInputText()
+
+        // Dry-run path: load only the voice registry (cheap, no 327MB model weights),
+        // resolve the voice, print the resolved parameters, and exit without synthesising.
+        if dryRun {
+            let registry = try VoiceRegistry(voicesPath: defaultVoicesPath())
+            let resolved = try resolveVoice(registry: registry)
+            print("voice:  \(resolved.name)")
+            print("speed:  \(speed)")
+            print("text:   \(inputText)")
+            print("(dry run — no synthesis performed)")
+            return
+        }
 
         let engine = try YapperEngine(
             modelPath: defaultModelPath(),
             voicesPath: defaultVoicesPath()
         )
-        let selectedVoice = try resolveVoice(engine: engine)
+        let selectedVoice = try resolveVoice(registry: engine.voiceRegistry)
 
         // Synthesise
         let result = try engine.synthesize(text: inputText, voice: selectedVoice, speed: speed)
@@ -92,15 +107,43 @@ struct SpeakCommand: ParsableCommand {
         try file.write(from: buffer)
     }
 
-    private func resolveVoice(engine: YapperEngine) throws -> Voice {
+    /// Resolve the voice to use for this invocation.
+    ///
+    /// Precedence (highest first):
+    ///   1. `--voice <name>` CLI flag
+    ///   2. `$YAPPER_VOICE` environment variable
+    ///   3. Random selection from the registry (non-deterministic per call)
+    ///
+    /// Invalid names from either --voice or $YAPPER_VOICE produce a clear error
+    /// identifying the source — no silent fallback to random or any hardcoded voice.
+    private func resolveVoice(registry: VoiceRegistry) throws -> Voice {
+        // 1. --voice CLI flag wins unconditionally
         if let voiceName = voice {
-            guard let v = engine.voiceRegistry.voices.first(where: { $0.name == voiceName }) else {
-                let available = engine.voiceRegistry.voices.prefix(5).map(\.name).joined(separator: ", ")
-                throw ValidationError("Voice '\(voiceName)' not found. Available: \(available)...")
-            }
-            return v
+            return try lookupVoice(voiceName, in: registry, source: "--voice flag")
         }
-        return engine.voiceRegistry.voices.first { $0.name == "af_heart" }
-            ?? engine.voiceRegistry.voices[0]
+        // 2. $YAPPER_VOICE env var — whitespace-only treated as unset
+        if let raw = ProcessInfo.processInfo.environment["YAPPER_VOICE"] {
+            let trimmed = raw.trimmingCharacters(in: .whitespaces)
+            if !trimmed.isEmpty {
+                return try lookupVoice(trimmed, in: registry, source: "$YAPPER_VOICE")
+            }
+        }
+        // 3. Random selection — no hardcoded voice name fallback
+        guard let chosen = registry.randomSystem() else {
+            throw ValidationError(
+                "No voices found in the registry at \(registry.voicesPath.path)."
+            )
+        }
+        return chosen
+    }
+
+    private func lookupVoice(_ name: String, in registry: VoiceRegistry, source: String) throws -> Voice {
+        guard let v = registry.voices.first(where: { $0.name == name }) else {
+            let available = registry.voices.prefix(5).map(\.name).joined(separator: ", ")
+            throw ValidationError(
+                "Voice '\(name)' not found (from \(source)). Available: \(available)..."
+            )
+        }
+        return v
     }
 }
