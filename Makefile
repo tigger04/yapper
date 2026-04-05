@@ -79,12 +79,19 @@ install: build ## Install yapper (and yap shortcut) to ~/.local/bin
 		exit 1; \
 	fi
 	@mkdir -p "$(INSTALL_DIR)"
-	@# Both yapper and yap are symlinks to the same Mach-O. macOS resolves
-	@# symlinks via _NSGetExecutablePath so Bundle.main lookups find the .bundle
-	@# resources next to the real binary. The binary inspects CommandLine.arguments[0]
-	@# at startup and routes `yap` invocations to the speak subcommand automatically.
-	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yapper"
-	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yap"
+	@# Wrapper scripts, NOT symlinks. macOS's _NSGetExecutablePath (and therefore
+	@# Bundle.main.bundleURL) resolves to the caller's invocation path, not through
+	@# symlinks — so a symlink at $(INSTALL_DIR)/yapper would cause MLX to look for
+	@# mlx-swift_Cmlx.bundle in $(INSTALL_DIR)/ instead of the DerivedData directory
+	@# where the .bundle resources live, and synthesis would fail at runtime.
+	@# `exec` ensures the parent shell is replaced so signals and exit codes pass
+	@# through cleanly. `exec -a yap` sets argv[0]="yap" for the yap wrapper so
+	@# the binary's own argv[0] dispatch routes to the speak subcommand.
+	@# Remove any existing file or symlink at the target paths before writing.
+	@rm -f "$(INSTALL_DIR)/yapper" "$(INSTALL_DIR)/yap"
+	@printf '#!/bin/bash\nexec "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
+	@printf '#!/bin/bash\nexec -a yap "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yap"
+	@chmod +x "$(INSTALL_DIR)/yapper" "$(INSTALL_DIR)/yap"
 	@echo "Installed yapper and yap to $(INSTALL_DIR)"
 
 uninstall: ## Remove yapper and yap from ~/.local/bin

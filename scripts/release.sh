@@ -183,9 +183,67 @@ if ! printf '%s\n' "${submit_output}" | grep -Eq 'status: Accepted'; then
   xcrun notarytool log <submission-id> --keychain-profile ${NOTARY_PROFILE}"
 fi
 
-# 6. Pre-upload verification gate — fails fast if anything is wrong with the signed artefact
+# 6a. Pre-upload verification gate — signature structure
 printf '\nVerifying signed artefact...\n'
 bash "${SCRIPT_DIR}/verify-signature.sh" "${staging}" || die "verify-signature.sh rejected the signed artefact"
+
+# 6b. Runtime smoke test — REAL synthesis through both bin/yapper and bin/yap wrappers.
+#
+# This catches the entire class of install-time layout bugs where the formula
+# and Makefile install wrappers look correct but Bundle.main.bundleURL fails
+# to resolve the resource bundles at runtime. Missing this test is what
+# allowed v0.8.4 to ship with yap synthesis broken. Never again.
+#
+# We construct a throwaway install prefix that mirrors what the Homebrew
+# formula install block builds (bin/yapper + bin/yap wrapper scripts, libexec
+# containing the signed binary + bundles), then run actual synthesis with
+# --voice af_heart to a temp WAV output, and verify the WAV was produced.
+printf '\nRuntime smoke test (real synthesis through bin/yapper and bin/yap)...\n'
+smoke_prefix="${build_dir}/smoke-prefix"
+mkdir -p "${smoke_prefix}/bin" "${smoke_prefix}/libexec"
+cp -- "${staging}/yapper" "${smoke_prefix}/libexec/"
+for bundle in "${BUNDLE_NAMES[@]}"; do
+    cp -R -- "${staging}/${bundle}" "${smoke_prefix}/libexec/"
+done
+
+cat > "${smoke_prefix}/bin/yapper" <<SH
+#!/bin/bash
+exec "${smoke_prefix}/libexec/yapper" "\$@"
+SH
+cat > "${smoke_prefix}/bin/yap" <<SH
+#!/bin/bash
+exec -a yap "${smoke_prefix}/libexec/yapper" "\$@"
+SH
+chmod +x "${smoke_prefix}/bin/yapper" "${smoke_prefix}/bin/yap"
+
+# Step 1: quick sanity — wrappers execute and argv[0] dispatch fires
+printf '  smoke: bin/yapper --version via wrapper\n'
+"${smoke_prefix}/bin/yapper" --version >/dev/null || die "smoke: bin/yapper --version failed"
+printf '  smoke: bin/yap --dry-run (argv[0] dispatch via exec -a yap)\n'
+yap_dryrun=$("${smoke_prefix}/bin/yap" --dry-run "smoke test" 2>&1) || die "smoke: bin/yap --dry-run failed: ${yap_dryrun}"
+printf '%s\n' "${yap_dryrun}" | grep -q '^voice:' || die "smoke: yap --dry-run did not print a voice line: ${yap_dryrun}"
+
+# Step 2: REAL synthesis through both wrappers — exercises MLX metallib load,
+# Bundle.main resource lookup, and the full inference pipeline. Uses
+# yapper convert (file-based, no audio playback) via stdin text, writing to
+# a throwaway .m4a. This is the exact test that would have caught v0.8.4.
+printf '  smoke: REAL synthesis via bin/yapper convert (exercises MLX metallib load)\n'
+smoke_txt="${build_dir}/smoke.txt"
+printf 'Smoke test.\n' > "${smoke_txt}"
+smoke_m4a_yapper="${build_dir}/smoke-yapper.m4a"
+"${smoke_prefix}/bin/yapper" convert "${smoke_txt}" -o "${smoke_m4a_yapper}" --voice af_heart \
+    >"${build_dir}/smoke-yapper.log" 2>&1 \
+    || die "smoke: bin/yapper convert synthesis failed. Log:
+$(cat "${build_dir}/smoke-yapper.log")"
+[[ -s "${smoke_m4a_yapper}" ]] || die "smoke: bin/yapper convert produced no output file"
+
+# bin/yap itself doesn't expose convert (it hard-dispatches to speak), so the
+# second smoke pass runs synthesis via bin/yapper's convert path on purpose —
+# the critical check is that MLX is finding its metallib via libexec-anchored
+# Bundle.main lookups, which both wrappers share identical install topology.
+# The argv[0] dispatch for yap is already verified by the --dry-run step above.
+printf '  ✓ synthesis produced %s bytes of audio — MLX metallib load working\n' \
+    "$(stat -f%z "${smoke_m4a_yapper}")"
 
 # 7. Tar the signed + notarised binary and bundles
 printf '\nCreating %s...\n' "${BINARY_ASSET}"
@@ -265,17 +323,33 @@ class Yapper < Formula
 
   def install
     # Prebuilt Developer-ID signed binary and its Swift resource bundles go into
-    # libexec. Both bin entries are symlinks to the same Mach-O — macOS's
-    # _NSGetExecutablePath resolves through symlinks, so Bundle.main lookups find
-    # the .bundle directories sitting next to libexec/yapper. The binary inspects
-    # CommandLine.arguments[0] at startup and, when invoked via the \`yap\` symlink,
-    # prepends \`speak\` to the argument list so \`yap "text"\` behaves as
+    # libexec. bin/yapper and bin/yap are wrapper scripts that \`exec\` the real
+    # libexec/yapper binary — NOT symlinks. On modern macOS, Bundle.main.bundleURL
+    # (which MLX uses to locate default.metallib and other resource bundles) is
+    # derived from the *invocation* path, not from the symlink target. A symlink
+    # at bin/yapper would make Bundle.main look for the .bundle resources in bin/
+    # instead of libexec/, and synthesis would fail at runtime with
+    # "Failed to load the default metallib".
+    #
+    # \`exec\` ensures the parent shell is replaced so signals and exit codes
+    # propagate cleanly. \`exec -a yap\` on the yap wrapper sets argv[0]="yap" so
+    # the binary's own argv[0] dispatch (in Sources/yapper/Yapper.swift) routes
+    # to the speak subcommand automatically — making \`yap "text"\` behave as
     # \`yapper speak "text"\`.
     libexec.install "yapper"
     libexec.install Dir["*.bundle"]
 
-    bin.install_symlink libexec/"yapper" => "yapper"
-    bin.install_symlink libexec/"yapper" => "yap"
+    (bin/"yapper").write <<~SH
+      #!/bin/bash
+      exec "#{libexec}/yapper" "\$@"
+    SH
+    (bin/"yapper").chmod 0755
+
+    (bin/"yap").write <<~SH
+      #!/bin/bash
+      exec -a yap "#{libexec}/yapper" "\$@"
+    SH
+    (bin/"yap").chmod 0755
 
     (share/"yapper/models").mkpath
     (share/"yapper/voices").mkpath

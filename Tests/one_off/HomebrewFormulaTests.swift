@@ -290,35 +290,41 @@ struct YapShortcutTests {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    // OT-14.1: Formula install block creates a bin/yap symlink to the installed yapper binary
-    @Test("OT-14.1: formula install block creates bin/yap as symlink")
-    func formulaInstallsYapSymlink() throws {
+    // OT-14.1: Formula install block creates a bin/yap wrapper that execs libexec/yapper
+    // with argv[0]="yap" (via `exec -a`), so the binary's argv[0] dispatch routes to
+    // the speak subcommand. Wrapper, NOT symlink — symlinks break Bundle.main.bundleURL
+    // resolution on modern macOS, causing MLX to fail to find its metallib.
+    @Test("OT-14.1: formula install block creates bin/yap as exec -a wrapper")
+    func formulaInstallsYapWrapper() throws {
         let formula = try Self.read("Formula/yapper.rb")
-        #expect(formula.contains("bin.install_symlink libexec/\"yapper\" => \"yap\""),
-                "Formula must create bin/yap as a symlink to libexec/yapper")
-        // Same requirement in the release.sh heredoc so regenerated formulas stay correct
+        #expect(formula.contains("(bin/\"yap\").write"),
+                "Formula must write a bin/yap wrapper script")
+        #expect(formula.contains("exec -a yap"),
+                "Formula's yap wrapper must use 'exec -a yap' to set argv[0] for the Swift dispatch")
+        #expect(!formula.contains("bin.install_symlink libexec/\"yapper\" => \"yap\""),
+                "Formula must NOT use install_symlink for yap — symlinks break Bundle.main.bundleURL and MLX metallib lookup")
+
         let release = try Self.read("scripts/release.sh")
-        #expect(release.contains("bin.install_symlink libexec/\"yapper\" => \"yap\""),
-                "release.sh heredoc must generate the yap symlink")
+        #expect(release.contains("(bin/\"yap\").write"),
+                "release.sh heredoc must generate a bin/yap wrapper script")
+        #expect(release.contains("exec -a yap"),
+                "release.sh heredoc must use 'exec -a yap' in the yap wrapper")
     }
 
-    // OT-14.2: Formula retires the #11 wrapper script — bin/yapper is also a symlink now,
-    // structurally symmetric to bin/yap. No bash wrapper, no exec, no .write call.
-    @Test("OT-14.2: formula install block retires the #11 wrapper script")
-    func formulaRetiresWrapperScript() throws {
+    // OT-14.2: Formula keeps the #11-style wrapper for bin/yapper so Bundle.main.bundleURL
+    // resolves to libexec/ and MLX can find its metallib. Attempting to retire the wrapper
+    // (#14 v0.8.4 did this and broke synthesis) is explicitly disallowed.
+    @Test("OT-14.2: formula keeps bin/yapper wrapper script (do not retire)")
+    func formulaKeepsYapperWrapper() throws {
         let formula = try Self.read("Formula/yapper.rb")
-        #expect(formula.contains("bin.install_symlink libexec/\"yapper\" => \"yapper\""),
-                "Formula must create bin/yapper as a symlink (no wrapper script)")
-        #expect(!formula.contains("(bin/\"yapper\").write"),
-                "Formula must not contain the #11 wrapper-script .write block")
-        #expect(!formula.contains("exec \"#{libexec}/yapper\""),
-                "Formula must not contain the wrapper-script exec line")
+        #expect(formula.contains("(bin/\"yapper\").write"),
+                "Formula must keep the bin/yapper wrapper script — symlinks break MLX metallib lookup")
+        #expect(formula.contains("exec \"#{libexec}/yapper\""),
+                "bin/yapper wrapper must exec libexec/yapper so _NSGetExecutablePath resolves to libexec/")
 
         let release = try Self.read("scripts/release.sh")
-        #expect(release.contains("bin.install_symlink libexec/\"yapper\" => \"yapper\""),
-                "release.sh heredoc must generate bin/yapper as a symlink")
-        #expect(!release.contains("(bin/\"yapper\").write"),
-                "release.sh heredoc must not contain the wrapper-script .write block")
+        #expect(release.contains("(bin/\"yapper\").write"),
+                "release.sh heredoc must keep the bin/yapper wrapper script")
     }
 
     // OT-14.3: Yapper.swift inspects argv[0] and rewrites args when invoked as yap
@@ -343,16 +349,20 @@ struct YapShortcutTests {
                 "Yapper.swift must lowercase the invocation basename before comparison")
     }
 
-    // OT-14.5: Makefile install target creates both symlinks
-    @Test("OT-14.5: Makefile install creates both yapper and yap symlinks")
-    func makefileInstallsBothSymlinks() throws {
+    // OT-14.5: Makefile install target writes wrapper scripts for both yapper and yap.
+    // Must NOT use symlinks (Bundle.main.bundleURL does not resolve through symlinks on
+    // modern macOS — v0.8.4 shipped with ln -sf and was broken).
+    @Test("OT-14.5: Makefile install writes yapper and yap wrapper scripts (not symlinks)")
+    func makefileInstallsWrappers() throws {
         let makefile = try Self.read("Makefile")
-        #expect(makefile.contains("ln -sf \"$(PRODDIR)/yapper\" \"$(INSTALL_DIR)/yapper\""),
-                "Makefile install must create yapper as a symlink via ln -sf")
-        #expect(makefile.contains("ln -sf \"$(PRODDIR)/yapper\" \"$(INSTALL_DIR)/yap\""),
-                "Makefile install must create yap as a symlink via ln -sf")
-        #expect(!makefile.contains("printf '#!/usr/bin/env bash"),
-                "Makefile install must not use printf to write a wrapper script any more")
+        #expect(makefile.contains("INSTALL_DIR)/yapper"),
+                "Makefile install must install bin/yapper")
+        #expect(makefile.contains("INSTALL_DIR)/yap\""),
+                "Makefile install must install bin/yap")
+        #expect(makefile.contains("exec -a yap"),
+                "Makefile's yap wrapper must use 'exec -a yap' to set argv[0] for the Swift dispatch")
+        #expect(!makefile.contains("ln -sf \"$(PRODDIR)/yapper\" \"$(INSTALL_DIR)/yap\""),
+                "Makefile must NOT use ln -sf for yap — symlinks break Bundle.main.bundleURL and MLX metallib lookup")
     }
 
     // OT-14.6: Makefile uninstall removes both

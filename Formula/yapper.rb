@@ -22,17 +22,33 @@ class Yapper < Formula
 
   def install
     # Prebuilt Developer-ID signed binary and its Swift resource bundles go into
-    # libexec. Both bin entries are symlinks to the same Mach-O — macOS's
-    # _NSGetExecutablePath resolves through symlinks, so Bundle.main lookups find
-    # the .bundle directories sitting next to libexec/yapper. The binary inspects
-    # CommandLine.arguments[0] at startup and, when invoked via the `yap` symlink,
-    # prepends `speak` to the argument list so `yap "text"` behaves as
+    # libexec. bin/yapper and bin/yap are wrapper scripts that `exec` the real
+    # libexec/yapper binary — NOT symlinks. On modern macOS, Bundle.main.bundleURL
+    # (which MLX uses to locate default.metallib and other resource bundles) is
+    # derived from the *invocation* path, not from the symlink target. A symlink
+    # at bin/yapper would make Bundle.main look for the .bundle resources in bin/
+    # instead of libexec/, and synthesis would fail at runtime with
+    # "Failed to load the default metallib".
+    #
+    # `exec` ensures the parent shell is replaced so signals and exit codes
+    # propagate cleanly. `exec -a yap` on the yap wrapper sets argv[0]="yap" so
+    # the binary's own argv[0] dispatch (in Sources/yapper/Yapper.swift) routes
+    # to the speak subcommand automatically — making `yap "text"` behave as
     # `yapper speak "text"`.
     libexec.install "yapper"
     libexec.install Dir["*.bundle"]
 
-    bin.install_symlink libexec/"yapper" => "yapper"
-    bin.install_symlink libexec/"yapper" => "yap"
+    (bin/"yapper").write <<~SH
+      #!/bin/bash
+      exec "#{libexec}/yapper" "$@"
+    SH
+    (bin/"yapper").chmod 0755
+
+    (bin/"yap").write <<~SH
+      #!/bin/bash
+      exec -a yap "#{libexec}/yapper" "$@"
+    SH
+    (bin/"yap").chmod 0755
 
     (share/"yapper/models").mkpath
     (share/"yapper/voices").mkpath
