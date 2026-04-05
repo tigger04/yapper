@@ -10,20 +10,23 @@ Yapper synthesizes natural-sounding speech from text, running entirely on-device
 
 ```bash
 # Speak text aloud - picks a random voice each time by default
-yapper speak "Hello, this is yapper."
+yap "Hello, this is yapper."
+
+# `yap` is shorthand for `yapper speak`. The two are exactly equivalent;
+# every flag below also works with the full `yapper speak` form.
 
 # Pin a specific voice for one invocation
-yapper speak --voice bf_emma "Hello, this is yapper."
+yap --voice bf_emma "Hello, this is yapper."
 
 # Or pin it for the whole shell session
 export YAPPER_VOICE=bm_daniel
-yapper speak "Now I sound like Daniel every time."
+yap "Now I sound like Daniel every time."
 
 # Check which voice would be used, without synthesizing anything
-yapper speak --dry-run "Hello, this is yapper."
+yap --dry-run "Hello, this is yapper."
 
 # Custom pronunciation for names the G2P gets wrong
-yapper speak "Hello [Taḋg](/taɪɡ/), how are you today?"
+yap "Hello [Taḋg](/taɪɡ/), how are you today?"
 
 # List available voices
 yapper voices

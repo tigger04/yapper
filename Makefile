@@ -72,22 +72,24 @@ test-one-off: lint ## Run one-off tests (not part of regression)
 		grep -v "may cause spurious" | \
 		grep -v "^$$"
 
-install: build ## Install yapper to ~/.local/bin
+install: build ## Install yapper (and yap shortcut) to ~/.local/bin
 	$(eval PRODDIR := $(shell find $(DERIVED_DATA)/yapper-*/Build/Products/Debug -name yapper -type f 2>/dev/null | head -1 | xargs dirname))
 	@if [ -z "$(PRODDIR)" ]; then \
 		echo "Error: could not find yapper binary. Run 'make build' first."; \
 		exit 1; \
 	fi
 	@mkdir -p "$(INSTALL_DIR)"
-	@# Remove any existing symlink to prevent following it into DerivedData
-	@if [ -L "$(INSTALL_DIR)/yapper" ]; then rm "$(INSTALL_DIR)/yapper"; fi
-	@printf '#!/usr/bin/env bash\nexec "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
-	@chmod +x "$(INSTALL_DIR)/yapper"
-	@echo "Installed yapper to $(INSTALL_DIR)/yapper"
+	@# Both yapper and yap are symlinks to the same Mach-O. macOS resolves
+	@# symlinks via _NSGetExecutablePath so Bundle.main lookups find the .bundle
+	@# resources next to the real binary. The binary inspects CommandLine.arguments[0]
+	@# at startup and routes `yap` invocations to the speak subcommand automatically.
+	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yapper"
+	@ln -sf "$(PRODDIR)/yapper" "$(INSTALL_DIR)/yap"
+	@echo "Installed yapper and yap to $(INSTALL_DIR)"
 
-uninstall: ## Remove yapper from ~/.local/bin
-	@rm -f "$(INSTALL_DIR)/yapper"
-	@echo "Removed yapper from $(INSTALL_DIR)/yapper"
+uninstall: ## Remove yapper and yap from ~/.local/bin
+	@rm -f "$(INSTALL_DIR)/yapper" "$(INSTALL_DIR)/yap"
+	@echo "Removed yapper and yap from $(INSTALL_DIR)"
 
 clean: ## Remove build artefacts
 	swift package clean

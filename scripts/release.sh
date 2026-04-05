@@ -264,17 +264,18 @@ class Yapper < Formula
   end
 
   def install
-    # Prebuilt ad-hoc signed binary and its Swift resource bundles go into libexec;
-    # a thin wrapper script in bin/ execs the real binary so Bundle.main lookups
-    # resolve relative to libexec (where the .bundle directories live).
+    # Prebuilt Developer-ID signed binary and its Swift resource bundles go into
+    # libexec. Both bin entries are symlinks to the same Mach-O — macOS's
+    # _NSGetExecutablePath resolves through symlinks, so Bundle.main lookups find
+    # the .bundle directories sitting next to libexec/yapper. The binary inspects
+    # CommandLine.arguments[0] at startup and, when invoked via the \`yap\` symlink,
+    # prepends \`speak\` to the argument list so \`yap "text"\` behaves as
+    # \`yapper speak "text"\`.
     libexec.install "yapper"
     libexec.install Dir["*.bundle"]
 
-    (bin/"yapper").write <<~SH
-      #!/bin/bash
-      exec "#{libexec}/yapper" "\$@"
-    SH
-    (bin/"yapper").chmod 0755
+    bin.install_symlink libexec/"yapper" => "yapper"
+    bin.install_symlink libexec/"yapper" => "yap"
 
     (share/"yapper/models").mkpath
     (share/"yapper/voices").mkpath
