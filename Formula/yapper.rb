@@ -1,10 +1,10 @@
 class Yapper < Formula
   desc "Fast, Apple Silicon-native text-to-speech CLI and Swift library"
   homepage "https://github.com/tigger04/yapper"
-  url "https://github.com/tigger04/yapper/releases/download/v0.8.3/yapper-macos-arm64.tar.gz"
-  sha256 "fab3a9170028990ccb4b27cc6fce74983e56a24ae0bd5beae9f527c54a7d4a15"
+  url "https://github.com/tigger04/yapper/releases/download/v0.8.4/yapper-macos-arm64.tar.gz"
+  sha256 "eb10861dfc4f567c48eea5dceaa27a101fb7c3658c002492c78951dd26003f52"
   license "Apache-2.0"
-  version "0.8.3"
+  version "0.8.4"
 
   depends_on :macos
   depends_on arch: :arm64
@@ -64,6 +64,6 @@ class Yapper < Formula
   end
 
   test do
-    assert_match "0.8.3", shell_output("#{bin}/yapper --version")
+    assert_match "0.8.4", shell_output("#{bin}/yapper --version")
   end
 end
