@@ -9,8 +9,18 @@ Fast, Apple Silicon-native text-to-speech. CLI tool and embeddable Swift library
 Yapper synthesizes natural-sounding speech from text, running entirely on-device via Metal GPU acceleration. No Python, no cloud APIs, no internet connection required.
 
 ```bash
-# Speak text aloud
+# Speak text aloud - picks a random voice each time by default
 yapper speak "Hello, this is yapper."
+
+# Pin a specific voice for one invocation
+yapper speak --voice bf_emma "Hello, this is yapper."
+
+# Or pin it for the whole shell session
+export YAPPER_VOICE=bm_daniel
+yapper speak "Now I sound like Daniel every time."
+
+# Check which voice would be used, without synthesizing anything
+yapper speak --dry-run "Hello, this is yapper."
 
 # Custom pronunciation for names the G2P gets wrong
 yapper speak "Hello [Taḋg](/taɪɡ/), how are you today?"
@@ -24,6 +34,25 @@ yapper convert notes.txt -o notes.m4a
 # Convert an epub to an audiobook with chapter markers
 yapper convert book.epub -o book.m4b
 ```
+
+### Voice selection
+
+`yapper speak` resolves the voice to use from three sources, in order of priority:
+
+1. **`--voice <name>`** - the CLI flag wins unconditionally
+2. **`$YAPPER_VOICE`** - an environment variable for persistent per-shell preferences
+3. **Random** - a different voice on every invocation, drawn from all installed voices
+
+To set a persistent default in your shell init:
+
+```bash
+# ~/.zshrc or ~/.bashrc
+export YAPPER_VOICE=bm_daniel
+```
+
+If `$YAPPER_VOICE` is set to a name that doesn't exist, `yapper speak` exits with a clear error rather than silently falling back - typos don't get hidden. The same applies to `--voice`.
+
+`yapper speak --dry-run` reports the resolved voice (plus speed and text) without performing synthesis or playing audio. Useful for confirming which voice would be selected, and fast because it skips the 327 MB model load entirely.
 
 ## Why
 
