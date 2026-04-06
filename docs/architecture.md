@@ -241,9 +241,33 @@ Input file
          ▼
     Audio encoding (ffmpeg)
          │
-         ├── .mp3 -> ffmpeg encodes each chapter, applies ID3 tags
-         └── .m4b -> ffmpeg encodes AAC, concatenates, applies chapter metadata
+         ├── .m4a -> one file per chapter/input, with MP4 metadata
+         ├── .mp3 -> one file per chapter/input, with ID3 tags
+         └── .m4b -> single audiobook file with chapter markers
 ```
+
+### Output format determines file topology
+
+The output format controls whether `yapper convert` produces one file or many. This replaces the behaviour of `make-audiobook`.
+
+| Output format | File count | When used |
+|---|---|---|
+| M4B | 1 file with chapter markers | User explicitly requests M4B, or single multi-chapter input defaults to it |
+| M4A | 1 file per chapter or per input | Default for multiple independent input files; per-chapter for multi-chapter inputs |
+| MP3 | 1 file per chapter or per input | Same as M4A but MP3 encoding |
+
+### Metadata convention
+
+Metadata applies to all output formats, not just M4B. The mappings follow established audiobook tooling conventions (inherited from make-audiobook):
+
+| Source | M4B | M4A | MP3 (ID3) |
+|---|---|---|---|
+| `--author` / interactive prompt | author | artist | artist |
+| `--title` / interactive prompt | title | album | album |
+| Chapter number (position) | chapter marker index | track number (n/total) | track number (n/total) |
+| Chapter name (TOC / heading / filename) | chapter title | track title | title |
+
+Interactive metadata prompts (author, title) appear when stdin is a TTY, regardless of output format.
 
 ### External tool dependencies
 
