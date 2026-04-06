@@ -77,9 +77,14 @@ test_RT5_5() {
 }
 run_test "RT-5.5" "preview invalid voice produces error" test_RT5_5
 
-# RT-5.6, RT-5.7, RT-5.8: VoiceRegistry error-handling tests.
-# These are engine-level (VoiceRegistry) tests, not CLI tests.
-# They remain in the Swift test-framework suite under VoiceRegistryTests.
-# See issue #17 for the rescope decision.
+# RT-5.6: Empty voices directory produces descriptive error.
+# This requires pointing yapper at an empty voices directory. The binary
+# discovers voices via Defaults.swift path resolution. Until a --voices-path
+# flag or env var exists, this test cannot be exercised at the CLI level.
+# The underlying VoiceRegistry error is tested in the Swift framework suite.
+# Deferred — tracked in #17.
+
+# RT-5.7, RT-5.8: VoiceRegistry error-handling tests.
+# Engine-level tests. Remain in Swift framework suite under VoiceRegistryTests.
 
 summarise "yapper voices"

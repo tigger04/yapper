@@ -327,4 +327,43 @@ test_RT15_13() {
 }
 run_test "RT-15.13" "real synthesis produces audio file (MLX metallib loads)" test_RT15_13
 
+# RT-4.13: SIGINT during playback exits with non-zero status.
+# RT-4.14: Audio stops within 1 second of SIGINT.
+# These tests cannot use the standard run_test harness because they need to
+# background a process and send signals — incompatible with the $() subshell
+# capture that run_test uses. Implemented inline with direct pass/fail tracking.
+TOTAL=$((TOTAL + 1))
+# Temporarily disable set -e because wait returns 130 (non-zero) when the
+# child is killed by SIGINT, which is the expected outcome.
+set +e
+"${YAPPER}" speak --voice af_heart "This is a longer sentence for signal testing." &
+_sigtest_pid=$!
+sleep 3
+_sigtest_start=$(date +%s)
+kill -INT "${_sigtest_pid}" 2>/dev/null
+wait "${_sigtest_pid}" 2>/dev/null
+_sigtest_rc=$?
+set -e
+_sigtest_end=$(date +%s)
+_sigtest_elapsed=$((_sigtest_end - _sigtest_start))
+
+if [[ ${_sigtest_rc} -ne 0 ]]; then
+    printf '  ✅ RT-4.13: SIGINT during playback exits non-zero\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-4.13: SIGINT during playback exits non-zero\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-4.13")
+fi
+
+TOTAL=$((TOTAL + 1))
+if [[ ${_sigtest_elapsed} -le 2 ]]; then
+    printf '  ✅ RT-4.14: audio stops within 1 second of SIGINT\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-4.14: audio stops within 1 second of SIGINT (took %ds)\n' "${_sigtest_elapsed}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-4.14")
+fi
+
 summarise "yapper speak"

@@ -197,4 +197,130 @@ test_RT6_21() {
 }
 run_test "RT-6.21" "zero inputs produces error" test_RT6_21
 
+# RT-6.8: --title "Title" sets the album ID3 tag.
+# User action: yapper convert file.txt --title "My Book"
+# User observes: ffprobe shows album=My Book.
+test_RT6_8() {
+    printf 'Title metadata test.' > "${SUITE_TMP}/rt68.txt"
+    "${YAPPER}" convert "${SUITE_TMP}/rt68.txt" -o "${SUITE_TMP}/rt68.m4a" --voice af_heart --title "My Book" >/dev/null 2>&1
+    ffprobe -v quiet -show_entries format_tags=album -of csv=p=0 "${SUITE_TMP}/rt68.m4a" 2>/dev/null | grep -q "My Book"
+}
+run_test "RT-6.8" "--title embeds album metadata" test_RT6_8
+
+# RT-6.10: Missing ffmpeg produces actionable error message.
+# ffmpeg discovery uses hardcoded paths (/opt/homebrew/bin, /usr/local/bin,
+# /usr/bin), not PATH, so this cannot be tested by restricting PATH.
+# The underlying error path is tested in the Swift framework suite.
+# Skipped at CLI level — tracked in #17.
+
+# RT-6.11: --dry-run outputs the planned actions.
+# User action: yapper convert file.txt --dry-run
+# User observes: voice, speed, input, output in stdout, no file created.
+test_RT6_11() {
+    printf 'Dry run test.' > "${SUITE_TMP}/rt611.txt"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt611.txt" --voice af_heart --dry-run 2>&1)
+    printf '%s' "${output}" | grep -qi "voice\|af_heart" || return 1
+    printf '%s' "${output}" | grep -qi "output\|rt611" || return 1
+}
+run_test "RT-6.11" "--dry-run outputs planned actions" test_RT6_11
+
+# RT-6.12: --dry-run does not create any output files.
+# User action: yapper convert file.txt --dry-run
+# User observes: no output file created.
+test_RT6_12() {
+    local dir="${SUITE_TMP}/rt612"
+    mkdir -p "${dir}"
+    printf 'Dry run no-create test.' > "${dir}/input.txt"
+    (cd "${dir}" && "${YAPPER}" convert input.txt --voice af_heart --dry-run >/dev/null 2>&1)
+    [[ ! -f "${dir}/input.m4a" ]]
+}
+run_test "RT-6.12" "--dry-run does not create output files" test_RT6_12
+
+# RT-6.17: Latin-1 encoded file produces error mentioning encoding.
+# User action: yapper convert latin1.txt
+# User observes: error about encoding, non-zero exit.
+test_RT6_17() {
+    # Create a file with Latin-1 bytes (0xe9 = é in Latin-1, invalid UTF-8 sequence)
+    printf 'Caf\xe9 au lait' > "${SUITE_TMP}/rt617.txt"
+    local output
+    if output=$("${YAPPER}" convert "${SUITE_TMP}/rt617.txt" 2>&1); then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "utf-8\|encoding"
+}
+run_test "RT-6.17" "Latin-1 file produces encoding error" test_RT6_17
+
+# RT-6.18: Binary file produces error distinguishable from encoding error.
+# User action: yapper convert binary.dat
+# User observes: error, non-zero exit.
+test_RT6_18() {
+    printf '\x00\x01\x02\x03\xff\xfe\xfd' > "${SUITE_TMP}/rt618.bin"
+    if "${YAPPER}" convert "${SUITE_TMP}/rt618.bin" >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-6.18" "binary file produces error" test_RT6_18
+
+# RT-6.20: Failure in one file does not prevent processing of subsequent files.
+# User action: yapper convert good.txt missing.txt good2.txt
+# User observes: good.m4a and good2.m4a exist despite missing.txt failing.
+test_RT6_20() {
+    local dir="${SUITE_TMP}/rt620"
+    mkdir -p "${dir}"
+    printf 'Good file one.' > "${dir}/good.txt"
+    printf 'Good file two.' > "${dir}/good2.txt"
+    # missing.txt intentionally does not exist
+    (cd "${dir}" && "${YAPPER}" convert good.txt missing.txt good2.txt --voice af_heart 2>/dev/null) || true
+    [[ -f "${dir}/good.m4a" ]] && [[ -f "${dir}/good2.m4a" ]]
+}
+run_test "RT-6.20" "failure in one file does not prevent others" test_RT6_20
+
+# RT-6.22: MP3 output via --format mp3 is valid.
+# User action: yapper convert file.txt --format mp3
+# User observes: valid MP3 file.
+test_RT6_22() {
+    printf 'MP3 test.' > "${SUITE_TMP}/rt622.txt"
+    "${YAPPER}" convert "${SUITE_TMP}/rt622.txt" -o "${SUITE_TMP}/rt622.mp3" --voice af_heart --format mp3 >/dev/null 2>&1
+    [[ -f "${SUITE_TMP}/rt622.mp3" ]] || return 1
+    ffprobe -v quiet -show_entries format=format_name -of csv=p=0 "${SUITE_TMP}/rt622.mp3" 2>/dev/null | grep -q "mp3"
+}
+run_test "RT-6.22" "MP3 output is valid" test_RT6_22
+
+# RT-6.23: MP3 output has correct audio duration.
+# User action: yapper convert file.txt --format mp3
+# User observes: MP3 duration is non-trivial (>0.5s).
+test_RT6_23() {
+    [[ -f "${SUITE_TMP}/rt622.mp3" ]] || return 1
+    local duration
+    duration=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${SUITE_TMP}/rt622.mp3" 2>/dev/null)
+    # Check duration is a number > 0.5
+    [[ -n "${duration}" ]] && awk "BEGIN{exit(${duration} > 0.5 ? 0 : 1)}"
+}
+run_test "RT-6.23" "MP3 output has correct duration" test_RT6_23
+
+# RT-6.24: Output to a non-existent output directory produces error.
+# User action: yapper convert file.txt -o /nonexistent/path/output.m4a
+# User observes: error, non-zero exit.
+test_RT6_24() {
+    printf 'Directory test.' > "${SUITE_TMP}/rt624.txt"
+    if "${YAPPER}" convert "${SUITE_TMP}/rt624.txt" -o "/nonexistent/path/output.m4a" --voice af_heart >/dev/null 2>&1; then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-6.24" "missing output directory produces error" test_RT6_24
+
+# RT-6.25: Error message names the missing directory.
+# User action: yapper convert file.txt -o /nonexistent/path/output.m4a
+# User observes: error message mentions the directory.
+test_RT6_25() {
+    printf 'Directory test.' > "${SUITE_TMP}/rt625.txt"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt625.txt" -o "/nonexistent/path/output.m4a" --voice af_heart 2>&1) || true
+    printf '%s' "${output}" | grep -q "nonexistent"
+}
+run_test "RT-6.25" "error message names the missing directory" test_RT6_25
+
 summarise "yapper convert"

@@ -61,8 +61,6 @@ struct ConvertCommand: ParsableCommand {
         // M4A/MP3 → one output file per chapter or per input file.
         //           An epub with 12 chapters produces 12 M4As. Three text files
         //           produce three M4As. Metadata is applied to each file.
-        let chapters = try gatherChapters()
-
         // The OUTPUT FORMAT determines the file topology:
         //
         // M4B → always package everything into one audiobook file.
@@ -73,14 +71,23 @@ struct ConvertCommand: ParsableCommand {
         //
         // M4A/MP3 with multiple independent input files →
         //       one file per input, named after the input file.
-        let singleInputMultiChapter = inputs.count == 1 && chapters.count > 1
-        let fmt = resolveFormat(multiChapter: singleInputMultiChapter)
-
-        if fmt == "m4b" {
+        //       Missing/invalid files are skipped with a warning (not aborted).
+        if inputs.count == 1 {
+            let chapters = try gatherChapters()
+            let fmt = resolveFormat(multiChapter: chapters.count > 1)
+            if fmt == "m4b" {
+                try runAudiobookMode(engine: engine, chapters: chapters)
+            } else if chapters.count > 1 {
+                try runChapterPerFileMode(engine: engine, chapters: chapters, format: fmt)
+            } else {
+                try runSingleFileMode(engine: engine)
+            }
+        } else if let format, format.lowercased() == "m4b" {
+            // Multiple inputs + explicit M4B → package as audiobook
+            let chapters = try gatherChapters()
             try runAudiobookMode(engine: engine, chapters: chapters)
-        } else if singleInputMultiChapter {
-            try runChapterPerFileMode(engine: engine, chapters: chapters, format: fmt)
         } else {
+            // Multiple inputs + M4A/MP3 → one file per input, skip failures
             try runSingleFileMode(engine: engine)
         }
     }
@@ -337,6 +344,15 @@ struct ConvertCommand: ParsableCommand {
             if let author { print("  Author: \(author)") }
             if let title { print("  Title: \(title)") }
             return
+        }
+
+        // Check output directory exists before spending time on synthesis
+        let outputDir = URL(fileURLWithPath: outputPath).deletingLastPathComponent().path
+        if !outputDir.isEmpty && outputDir != "." {
+            var isDir: ObjCBool = false
+            if !FileManager.default.fileExists(atPath: outputDir, isDirectory: &isDir) || !isDir.boolValue {
+                throw ValidationError("Output directory does not exist: \(outputDir)")
+            }
         }
 
         if FileManager.default.fileExists(atPath: outputPath) {
