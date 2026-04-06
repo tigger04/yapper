@@ -37,26 +37,20 @@ test-framework: lint ## Run framework tests only
 		-parallel-testing-enabled NO \
 		-skip-testing:YapperKitTests/SpeakCommandTests \
 		-skip-testing:YapperKitTests/VoicesCommandTests \
+		-skip-testing:YapperKitTests/ConvertCommandTests \
+		-skip-testing:YapperKitTests/VoiceSelectionPrecedenceTests \
+		-skip-testing:YapperKitTests/YapShortcutTests \
 		2>&1 | \
 		grep -v "^objc\[" | \
 		grep -v "duplicates must be" | \
 		grep -v "may cause spurious" | \
 		grep -v "^$$"
 
-test-cli: lint ## Run CLI command tests only
-	@xcodebuild build-for-testing -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet
-	@cp -R $(DERIVED_DATA)/yapper-*/Build/Products/Debug/MisakiSwift_MisakiSwift.bundle \
-		$(DERIVED_DATA)/yapper-*/Build/Products/Debug/PackageFrameworks/MisakiSwift.framework/Versions/A/Resources/ \
-		2>/dev/null || true
-	@xcodebuild test-without-building -scheme $(SCHEME) -destination '$(DESTINATION)' \
-		-only-testing:YapperKitTests/SpeakCommandTests \
-		-only-testing:YapperKitTests/VoicesCommandTests \
-		-parallel-testing-enabled NO \
-		2>&1 | \
-		grep -v "^objc\[" | \
-		grep -v "duplicates must be" | \
-		grep -v "may cause spurious" | \
-		grep -v "^$$"
+test-cli: build ## Run CLI command tests (bash, invokes the built binary)
+	@bash tests/regression/cli/test_speak.sh
+	@bash tests/regression/cli/test_voices.sh
+	@bash tests/regression/cli/test_convert.sh
+	@bash tests/regression/cli/test_yap.sh
 
 test-one-off: lint ## Run one-off tests (not part of regression)
 	@xcodebuild build-for-testing -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet
