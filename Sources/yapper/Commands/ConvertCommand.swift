@@ -52,11 +52,17 @@ struct ConvertCommand: ParsableCommand {
             voicesPath: defaultVoicesPath()
         )
 
-        // Determine if this is audiobook mode (multi-chapter input)
-        let chapters = try gatherChapters()
-
-        if chapters.count > 1 {
-            try runAudiobookMode(engine: engine, chapters: chapters)
+        // Audiobook mode: a SINGLE input file that contains multiple chapters
+        // (e.g. an epub with a TOC, a PDF with heading-detected chapters).
+        // Multiple input files = batch of independent single-file conversions,
+        // each producing its own output file.
+        if inputs.count == 1 {
+            let chapters = try gatherChapters()
+            if chapters.count > 1 {
+                try runAudiobookMode(engine: engine, chapters: chapters)
+            } else {
+                try runSingleFileMode(engine: engine)
+            }
         } else {
             try runSingleFileMode(engine: engine)
         }

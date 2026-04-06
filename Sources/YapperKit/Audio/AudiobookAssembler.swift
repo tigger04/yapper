@@ -121,6 +121,12 @@ public struct AudiobookAssembler {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = args
+        // All three stdio handles must be detached from the terminal. Without
+        // standardInput = /dev/null, ffmpeg inherits the parent's stdin, which
+        // can trigger SIGTTIN (stopped) if the terminal's process group has moved
+        // on — this caused a deadlock where yapper waited for ffmpeg to exit and
+        // ffmpeg was stopped waiting for terminal access it would never get.
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
