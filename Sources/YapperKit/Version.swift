@@ -2,4 +2,4 @@
 // ABOUTME: Single source of truth for the version string.
 
 /// Current YapperKit version.
-public let version = "0.8.5"
+public let version = "0.8.6"
