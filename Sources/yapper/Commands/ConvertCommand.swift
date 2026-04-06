@@ -52,17 +52,34 @@ struct ConvertCommand: ParsableCommand {
             voicesPath: defaultVoicesPath()
         )
 
-        // Audiobook mode: a SINGLE input file that contains multiple chapters
-        // (e.g. an epub with a TOC, a PDF with heading-detected chapters).
-        // Multiple input files = batch of independent single-file conversions,
-        // each producing its own output file.
-        if inputs.count == 1 {
-            let chapters = try gatherChapters()
-            if chapters.count > 1 {
-                try runAudiobookMode(engine: engine, chapters: chapters)
-            } else {
-                try runSingleFileMode(engine: engine)
-            }
+        // The OUTPUT FORMAT determines the file topology:
+        //
+        // M4B → package everything into one audiobook file with chapter markers.
+        //       Works for single multi-chapter inputs (epub, PDF) and for
+        //       multiple independent inputs (treated as chapters of one book).
+        //
+        // M4A/MP3 → one output file per chapter or per input file.
+        //           An epub with 12 chapters produces 12 M4As. Three text files
+        //           produce three M4As. Metadata is applied to each file.
+        let chapters = try gatherChapters()
+
+        // The OUTPUT FORMAT determines the file topology:
+        //
+        // M4B → always package everything into one audiobook file.
+        //       A single epub or multiple txt files become chapters.
+        //
+        // M4A/MP3 with a single multi-chapter input (epub, PDF) →
+        //       one file per chapter, named by chapter title.
+        //
+        // M4A/MP3 with multiple independent input files →
+        //       one file per input, named after the input file.
+        let singleInputMultiChapter = inputs.count == 1 && chapters.count > 1
+        let fmt = resolveFormat(multiChapter: singleInputMultiChapter)
+
+        if fmt == "m4b" {
+            try runAudiobookMode(engine: engine, chapters: chapters)
+        } else if singleInputMultiChapter {
+            try runChapterPerFileMode(engine: engine, chapters: chapters, format: fmt)
         } else {
             try runSingleFileMode(engine: engine)
         }
@@ -180,6 +197,92 @@ struct ConvertCommand: ParsableCommand {
         let minutes = Int(totalDuration) / 60
         let seconds = Int(totalDuration) % 60
         fputs("Created \(outputPath) (\(minutes):\(String(format: "%02d", seconds)))\n", stderr)
+    }
+
+    // MARK: - Chapter-per-file mode (M4A/MP3 from multi-chapter input)
+
+    /// Produces one output file per chapter. Used when a multi-chapter input
+    /// (epub, PDF with headings, or multiple input files) is converted to M4A
+    /// or MP3 — formats that don't support chapter markers.
+    private func runChapterPerFileMode(engine: YapperEngine, chapters: [Chapter], format: String) throws {
+        let voices = assignVoices(engine: engine, chapterCount: chapters.count)
+        let (resolvedAuthor, resolvedTitle) = resolveMetadata(chapters: chapters)
+
+        // Derive output directory from -o flag or first input's directory
+        let outputDir: String
+        if let output {
+            // If -o points to a directory, use it; if it's a file path, use its directory
+            var isDir: ObjCBool = false
+            if FileManager.default.fileExists(atPath: output, isDirectory: &isDir), isDir.boolValue {
+                outputDir = output
+            } else {
+                outputDir = URL(fileURLWithPath: output).deletingLastPathComponent().path
+            }
+        } else {
+            outputDir = URL(fileURLWithPath: inputs[0]).deletingLastPathComponent().path
+        }
+
+        if dryRun {
+            print("Chapter-per-file conversion plan:")
+            print("  Output directory: \(outputDir)")
+            print("  Format: \(format)")
+            print("  Chapters: \(chapters.count)")
+            if let resolvedAuthor { print("  Author: \(resolvedAuthor)") }
+            if let resolvedTitle { print("  Title: \(resolvedTitle)") }
+            for (i, chapter) in chapters.enumerated() {
+                let filename = chapterFilename(index: i, title: chapter.title, format: format)
+                print("  [\(i + 1)/\(chapters.count)] \(filename) (\(voices[i].name))")
+            }
+            return
+        }
+
+        fputs("Converting: \(chapters.count) chapters to \(format)\n", stderr)
+
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper_chapters_\(ProcessInfo.processInfo.processIdentifier)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        for (i, chapter) in chapters.enumerated() {
+            let voice = voices[i]
+            let filename = chapterFilename(index: i, title: chapter.title, format: format)
+            let outputPath = "\(outputDir)/\(filename)"
+
+            fputs("  [\(i + 1)/\(chapters.count)] \(filename) (\(voice.name)) ... ", stderr)
+
+            let result = try engine.synthesize(text: chapter.text, voice: voice, speed: speed)
+            let duration = Double(result.samples.count) / Double(result.sampleRate)
+
+            // Write WAV
+            let wavPath = tmpDir.appendingPathComponent("ch\(i + 1).wav")
+            try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: wavPath)
+
+            // Encode to target format
+            if FileManager.default.fileExists(atPath: outputPath) {
+                let backupPath = nextBackupPath(for: outputPath)
+                try FileManager.default.moveItem(atPath: outputPath, toPath: backupPath)
+            }
+            try AudiobookAssembler.encodeAAC(wavPath: wavPath.path, output: outputPath)
+            try? FileManager.default.removeItem(at: wavPath)
+
+            fputs("\(String(format: "%.1f", duration))s\n", stderr)
+        }
+
+        fputs("Created \(chapters.count) files in \(outputDir)\n", stderr)
+    }
+
+    /// Generate a filename for an individual chapter output file.
+    private func chapterFilename(index: Int, title: String, format: String) -> String {
+        let paddedIndex = String(format: "%02d", index + 1)
+        // Sanitise the title for use as a filename
+        let safe = title
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+            .trimmingCharacters(in: .whitespaces)
+        if safe.isEmpty {
+            return "chapter_\(paddedIndex).\(format)"
+        }
+        return "\(paddedIndex)_\(safe).\(format)"
     }
 
     // MARK: - Single file mode
