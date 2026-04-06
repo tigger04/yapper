@@ -42,6 +42,9 @@ struct ConvertCommand: ParsableCommand {
     @Flag(name: .long, help: "Force interactive prompts even when stdin is not a TTY.")
     var interactive: Bool = false
 
+    @Flag(name: .long, help: "Skip interactive prompts regardless of TTY state.")
+    var nonInteractive: Bool = false
+
     func run() throws {
         guard !inputs.isEmpty else {
             throw ValidationError("No input files specified.")
@@ -303,23 +306,59 @@ struct ConvertCommand: ParsableCommand {
 
         let selectedVoice = try resolveVoice(engine: engine, voiceName: voice)
 
-        var failures = 0
-        for input in inputs {
+        // Resolve metadata (prompts interactively if TTY, pre-fills from epub)
+        let chapters = inputs.map { Chapter(title: URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent, text: "") }
+        let (resolvedAuthor, resolvedTitle) = resolveMetadata(chapters: chapters)
+
+        // Extract track numbers from filenames
+        let trackNumbers = extractTrackNumbers(from: inputs)
+
+        var successes: [String] = []
+        var failures: [String] = []
+        for (i, input) in inputs.enumerated() {
             do {
-                try convertSingleFile(input: input, engine: engine, voice: selectedVoice, format: fmt)
+                try convertSingleFile(
+                    input: input,
+                    engine: engine,
+                    voice: selectedVoice,
+                    format: fmt,
+                    author: resolvedAuthor,
+                    title: resolvedTitle,
+                    trackNumber: trackNumbers[i],
+                    trackTotal: inputs.count
+                )
+                successes.append(input)
             } catch {
                 fputs("Error converting \(input): \(error)\n", stderr)
-                failures += 1
+                failures.append(input)
             }
         }
 
-        if failures > 0 {
-            fputs("\(failures) of \(inputs.count) files failed.\n", stderr)
+        // Batch summary
+        if inputs.count > 1 {
+            if !successes.isEmpty {
+                fputs("\(successes.count) of \(inputs.count) files converted successfully.\n", stderr)
+            }
+            if !failures.isEmpty {
+                fputs("\(failures.count) of \(inputs.count) files failed:\n", stderr)
+                for f in failures { fputs("  \(f)\n", stderr) }
+                throw ExitCode(1)
+            }
+        } else if !failures.isEmpty {
             throw ExitCode(1)
         }
     }
 
-    private func convertSingleFile(input: String, engine: YapperEngine, voice: Voice, format: String) throws {
+    private func convertSingleFile(
+        input: String,
+        engine: YapperEngine,
+        voice: Voice,
+        format: String,
+        author: String? = nil,
+        title: String? = nil,
+        trackNumber: Int? = nil,
+        trackTotal: Int? = nil
+    ) throws {
         guard FileManager.default.fileExists(atPath: input) else {
             throw ValidationError("Input file not found: \(input)")
         }
@@ -333,7 +372,11 @@ struct ConvertCommand: ParsableCommand {
             throw ValidationError("File is empty or whitespace-only: \(input)")
         }
 
+        // Clean text of residual markup from pandoc extraction
+        let cleaned = cleanMarkup(trimmed)
+
         let outputPath = resolveOutputPath(for: input, format: format)
+        let trackTitle = URL(fileURLWithPath: input).deletingPathExtension().lastPathComponent
 
         if dryRun {
             print("Would convert: \(input)")
@@ -343,6 +386,12 @@ struct ConvertCommand: ParsableCommand {
             print("  Speed: \(speed)")
             if let author { print("  Author: \(author)") }
             if let title { print("  Title: \(title)") }
+            if let trackNumber {
+                let trackStr = trackTotal != nil ? "\(trackNumber)/\(trackTotal!)" : "\(trackNumber)"
+                print("  Track: \(trackStr)")
+            }
+            print("  Track title: \(trackTitle)")
+            print("  Text: \(cleaned)")
             return
         }
 
@@ -362,14 +411,23 @@ struct ConvertCommand: ParsableCommand {
         }
 
         fputs("Synthesising \(input)...\n", stderr)
-        let result = try engine.synthesize(text: trimmed, voice: voice, speed: speed)
+        let result = try engine.synthesize(text: cleaned, voice: voice, speed: speed)
 
         let tmpWav = FileManager.default.temporaryDirectory
             .appendingPathComponent("yapper_convert_\(ProcessInfo.processInfo.processIdentifier).wav")
         try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: tmpWav)
         defer { try? FileManager.default.removeItem(at: tmpWav) }
 
-        try encodeWithFFmpeg(input: tmpWav.path, output: outputPath, format: format)
+        try encodeWithFFmpeg(
+            input: tmpWav.path,
+            output: outputPath,
+            format: format,
+            author: author,
+            title: title,
+            trackNumber: trackNumber,
+            trackTotal: trackTotal,
+            trackTitle: trackTitle
+        )
 
         let duration = Double(result.samples.count) / Double(result.sampleRate)
         fputs("Created \(outputPath) (\(String(format: "%.1f", duration))s)\n", stderr)
@@ -418,9 +476,9 @@ struct ConvertCommand: ParsableCommand {
             }
         }
 
-        // Interactive prompts if TTY
+        // Interactive prompts if TTY (unless --non-interactive)
         let isTTY = isatty(FileHandle.standardInput.fileDescriptor) != 0
-        if isTTY || interactive {
+        if !nonInteractive && (isTTY || interactive) {
             if let defaultTitle = resolvedTitle {
                 fputs("Enter title [\(defaultTitle)]: ", stderr)
             } else {
@@ -488,7 +546,114 @@ struct ConvertCommand: ParsableCommand {
             ?? engine.voiceRegistry.voices[0]
     }
 
+    // MARK: - Text cleanup
+
+    /// Clean residual markup from pandoc-extracted text before synthesis.
+    /// Without this, TTS reads HTML tags, markdown image syntax, and other
+    /// markup aloud. Inherited from make-audiobook's sed cleanup pipeline.
+    private func cleanMarkup(_ text: String) -> String {
+        var result = text
+
+        // Strip HTML/XML tags
+        result = result.replacingOccurrences(
+            of: "<[^>]*>", with: "", options: .regularExpression)
+
+        // Strip markdown image links: ![alt](url)
+        result = result.replacingOccurrences(
+            of: #"!\[[^\]]*\]\([^)]*\)"#, with: "", options: .regularExpression)
+
+        // Strip image references: !(path)
+        result = result.replacingOccurrences(
+            of: #"!\([^)]*\)"#, with: "", options: .regularExpression)
+
+        // Convert markdown links [text](url) to just text
+        result = result.replacingOccurrences(
+            of: #"\[([^\]]*)\]\([^)]*\)"#, with: "$1", options: .regularExpression)
+
+        // Strip {class} attribute blocks
+        result = result.replacingOccurrences(
+            of: #"\{[^}]*\}"#, with: "", options: .regularExpression)
+
+        // Strip ::: directive lines
+        result = result.replacingOccurrences(
+            of: #"(?m)^:::.*$"#, with: "", options: .regularExpression)
+
+        // Strip stray backslashes
+        result = result.replacingOccurrences(of: "\\", with: "")
+
+        // Strip empty bracket pairs
+        result = result.replacingOccurrences(of: "[]", with: "")
+
+        // Collapse multiple blank lines
+        result = result.replacingOccurrences(
+            of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - Track number extraction
+
+    /// Extract track numbers from input filenames when they form a consecutive
+    /// sequence (starting from 0 or 1, incrementing by 1, allowing zero-padding).
+    /// Returns an array of track numbers (1-based for metadata), or positional
+    /// fallback (1, 2, 3, ...) when no valid sequence is detected.
+    private func extractTrackNumbers(from inputs: [String]) -> [Int] {
+        let filenames = inputs.map { URL(fileURLWithPath: $0).deletingPathExtension().lastPathComponent }
+
+        // Extract the first integer from each filename
+        let regex = try? NSRegularExpression(pattern: #"(\d+)"#)
+        var extracted: [Int?] = filenames.map { name in
+            guard let regex,
+                  let match = regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
+                  let range = Range(match.range(at: 1), in: name) else {
+                return nil
+            }
+            return Int(name[range])
+        }
+
+        // Check if all filenames have integers
+        let allHaveIntegers = extracted.allSatisfy { $0 != nil }
+        guard allHaveIntegers, let numbers = extracted as? [Int] else {
+            // Positional fallback
+            return Array(1...inputs.count)
+        }
+
+        // Check if they form a consecutive sequence starting from 0 or 1
+        let sorted = numbers.sorted()
+        let startsCorrectly = sorted.first == 0 || sorted.first == 1
+        let isConsecutive = zip(sorted, sorted.dropFirst()).allSatisfy { $1 - $0 == 1 }
+
+        if startsCorrectly && isConsecutive {
+            // Use the extracted numbers but shift 0-based sequences to 1-based
+            // for metadata (track 0 is not meaningful in ID3/MP4 tags)
+            if sorted.first == 0 {
+                return numbers.map { $0 + 1 }
+            }
+            return numbers
+        }
+
+        // Non-consecutive or doesn't start from 0/1 → positional fallback
+        return Array(1...inputs.count)
+    }
+
+    // MARK: - FFmpeg encoding
+
     private func encodeWithFFmpeg(input: String, output: String, format: String) throws {
+        try encodeWithFFmpeg(input: input, output: output, format: format,
+                            author: self.author, title: self.title,
+                            trackNumber: nil, trackTotal: nil, trackTitle: nil)
+    }
+
+    private func encodeWithFFmpeg(
+        input: String,
+        output: String,
+        format: String,
+        author: String?,
+        title: String?,
+        trackNumber: Int?,
+        trackTotal: Int?,
+        trackTitle: String?
+    ) throws {
         let ffmpegPath = ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
             .first { FileManager.default.fileExists(atPath: $0) }
         guard let ffmpeg = ffmpegPath else {
@@ -508,12 +673,20 @@ struct ConvertCommand: ParsableCommand {
         if let title {
             args += ["-metadata", "album=\(title)"]
         }
+        if let trackNumber {
+            let trackStr = trackTotal != nil ? "\(trackNumber)/\(trackTotal!)" : "\(trackNumber)"
+            args += ["-metadata", "track=\(trackStr)"]
+        }
+        if let trackTitle {
+            args += ["-metadata", "title=\(trackTitle)"]
+        }
 
         args.append(output)
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: ffmpeg)
         process.arguments = args
+        process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         try process.run()
