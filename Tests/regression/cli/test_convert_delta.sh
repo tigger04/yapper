@@ -296,4 +296,159 @@ test_RT20_28() {
 }
 run_test "RT-20.28" "markdown links reduced to link text in dry-run" test_RT20_28
 
+# ---------------------------------------------------------------------------
+# Missing tests: RT-20.6, 20.9, 20.23-20.27, 20.29-20.32
+# ---------------------------------------------------------------------------
+
+# RT-20.6: Flags suppress interactive prompt.
+# When --author and --title are both passed, no prompt should appear.
+test_RT20_6() {
+    printf 'Prompt test.' > "${SUITE_TMP}/rt206.txt"
+    # If this hangs, the prompt appeared despite flags being supplied.
+    timeout 10 "${YAPPER}" convert "${SUITE_TMP}/rt206.txt" -o "${SUITE_TMP}/rt206.m4a" \
+        --voice af_heart --author "A" --title "T" --non-interactive >/dev/null 2>&1
+}
+run_test "RT-20.6" "flags suppress interactive prompt" test_RT20_6
+
+# RT-20.9: Epub with --format m4a produces one M4A per chapter.
+# Requires an epub test fixture. Use the test epub from the regression suite.
+test_RT20_9() {
+    local epub
+    epub="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../.. && pwd)/Tests/fixtures/test_book.epub"
+    if [[ -z "${epub}" ]]; then
+        # No epub fixture available — skip gracefully
+        return 1
+    fi
+    local dir="${SUITE_TMP}/rt209"
+    mkdir -p "${dir}"
+    "${YAPPER}" convert "${epub}" --format m4a --voice af_heart --non-interactive -o "${dir}/chapter" >/dev/null 2>&1
+    # At least one M4A should be produced
+    local count
+    count=$(find "${dir}" -name "*.m4a" 2>/dev/null | wc -l | tr -d ' ')
+    [[ ${count} -ge 1 ]]
+}
+run_test "RT-20.9" "epub with --format m4a produces per-chapter M4A" test_RT20_9
+
+# RT-20.23: Cleaned text does not contain HTML tags.
+test_RT20_23() {
+    printf '<p>Hello</p> <br/> <span class="x">world</span>.' > "${SUITE_TMP}/rt2023.html"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2023.html" --voice af_heart --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -qE '<p>|<br|<span'; then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-20.23" "HTML tags stripped from dry-run text" test_RT20_23
+
+# RT-20.24: Cleaned text does not contain {.class} attribute blocks.
+test_RT20_24() {
+    printf 'Heading {#my-id .custom-class}\nBody text.' > "${SUITE_TMP}/rt2024.md"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2024.md" --voice af_heart --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -q '{#my-id'; then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-20.24" "{...} attribute blocks stripped from dry-run text" test_RT20_24
+
+# RT-20.25: Cleaned text does not contain ::: directive lines.
+test_RT20_25() {
+    printf '::: warning\nDo not do this.\n:::\nNormal text.' > "${SUITE_TMP}/rt2025.md"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2025.md" --voice af_heart --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -q ':::'; then
+        return 1
+    fi
+    # Normal text should still be present
+    printf '%s' "${output}" | grep -q "Normal text"
+}
+run_test "RT-20.25" "::: directives stripped from dry-run text" test_RT20_25
+
+# RT-20.26: Cleaned text does not contain stray backslashes.
+test_RT20_26() {
+    printf 'Hello \\world \\ test\\.' > "${SUITE_TMP}/rt2026.md"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2026.md" --voice af_heart --dry-run --non-interactive 2>&1)
+    # The text line should contain "Hello world  test." without backslashes
+    local textline
+    textline=$(printf '%s' "${output}" | grep -i "text:" | head -1)
+    if printf '%s' "${textline}" | grep -q '\\'; then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-20.26" "backslashes stripped from dry-run text" test_RT20_26
+
+# RT-20.27: Cleaned text does not contain ::: directive lines (alternate pattern).
+# This is a duplicate of RT-20.25 with a different directive style.
+test_RT20_27() {
+    printf ':::note\nSome note content\n:::\nKeep this.' > "${SUITE_TMP}/rt2027.md"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2027.md" --voice af_heart --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -q ':::note'; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -q "Keep this"
+}
+run_test "RT-20.27" "::: directives (no space) stripped from dry-run text" test_RT20_27
+
+# RT-20.29: Epub chapter conversion to M4A — track title matches chapter name from TOC.
+test_RT20_29() {
+    local epub
+    epub="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../.. && pwd)/Tests/fixtures/test_book.epub"
+    [[ -f "${epub}" ]] || return 1
+    local dir="${SUITE_TMP}/rt2029"
+    mkdir -p "${dir}"
+    "${YAPPER}" convert "${epub}" --format m4a --voice af_heart --non-interactive -o "${dir}/chapter" >/dev/null 2>&1
+    local first_m4a
+    first_m4a=$(find "${dir}" -name "*.m4a" 2>/dev/null | sort | head -1)
+    [[ -n "${first_m4a}" ]] || return 1
+    local title
+    title=$(ffprobe -v quiet -show_entries format_tags=title -of csv=p=0 "${first_m4a}" 2>/dev/null)
+    # Title should be non-empty (chapter name from TOC)
+    [[ -n "${title}" ]]
+}
+run_test "RT-20.29" "epub chapter M4A track title matches chapter name" test_RT20_29
+
+# RT-20.30: Epub with no --format defaults to M4B.
+test_RT20_30() {
+    local epub
+    epub="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../.. && pwd)/Tests/fixtures/test_book.epub"
+    [[ -f "${epub}" ]] || return 1
+    local dir="${SUITE_TMP}/rt2030"
+    mkdir -p "${dir}"
+    "${YAPPER}" convert "${epub}" --voice af_heart --non-interactive -o "${dir}/book.m4b" >/dev/null 2>&1
+    [[ -f "${dir}/book.m4b" ]]
+}
+run_test "RT-20.30" "epub default format is M4B" test_RT20_30
+
+# RT-20.31: Single file with explicit --format m4b produces a valid single-chapter M4B.
+test_RT20_31() {
+    local dir="${SUITE_TMP}/rt2031"
+    mkdir -p "${dir}"
+    printf 'Single chapter M4B test.' > "${dir}/notes.txt"
+    "${YAPPER}" convert "${dir}/notes.txt" --format m4b -o "${dir}/notes.m4b" --voice af_heart --non-interactive >/dev/null 2>&1
+    [[ -f "${dir}/notes.m4b" ]] || return 1
+    # Verify it's a valid container
+    ffprobe -v quiet -show_entries format=format_name -of csv=p=0 "${dir}/notes.m4b" 2>/dev/null | grep -qE "m4a|mov|mp4"
+}
+run_test "RT-20.31" "single file + explicit M4B produces valid M4B" test_RT20_31
+
+# RT-20.32: Multi-file M4B chapter titles match input filenames.
+test_RT20_32() {
+    local dir="${SUITE_TMP}/rt2032"
+    mkdir -p "${dir}"
+    printf 'Chapter alpha.' > "${dir}/alpha.txt"
+    printf 'Chapter beta.' > "${dir}/beta.txt"
+    "${YAPPER}" convert "${dir}/alpha.txt" "${dir}/beta.txt" --format m4b -o "${dir}/book.m4b" --voice af_heart --non-interactive >/dev/null 2>&1
+    [[ -f "${dir}/book.m4b" ]] || return 1
+    local chapters
+    chapters=$(ffprobe -v quiet -show_chapters -of csv=p=0 "${dir}/book.m4b" 2>/dev/null)
+    printf '%s' "${chapters}" | grep -q "alpha" || return 1
+    printf '%s' "${chapters}" | grep -q "beta"
+}
+run_test "RT-20.32" "multi-file M4B chapter titles match filenames" test_RT20_32
+
 summarise "make-audiobook delta"

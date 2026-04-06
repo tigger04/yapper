@@ -267,12 +267,21 @@ struct ConvertCommand: ParsableCommand {
             let wavPath = tmpDir.appendingPathComponent("ch\(i + 1).wav")
             try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: wavPath)
 
-            // Encode to target format
+            // Encode to target format with metadata
             if FileManager.default.fileExists(atPath: outputPath) {
                 let backupPath = nextBackupPath(for: outputPath)
                 try FileManager.default.moveItem(atPath: outputPath, toPath: backupPath)
             }
-            try AudiobookAssembler.encodeAAC(wavPath: wavPath.path, output: outputPath)
+            try encodeWithFFmpeg(
+                input: wavPath.path,
+                output: outputPath,
+                format: format,
+                author: resolvedAuthor,
+                title: resolvedTitle,
+                trackNumber: i + 1,
+                trackTotal: chapters.count,
+                trackTitle: chapter.title
+            )
             try? FileManager.default.removeItem(at: wavPath)
 
             fputs("\(String(format: "%.1f", duration))s\n", stderr)
