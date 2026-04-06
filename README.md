@@ -2,8 +2,6 @@
 
 Fast, Apple Silicon-native text-to-speech. CLI tool and embeddable Swift library, powered by [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [MLX](https://github.com/ml-explore/mlx-swift).
 
-> **Status: Work in progress.** The core inference engine is complete and producing high-quality speech. CLI commands and audiobook generation are under active development.
-
 ## What it does
 
 Yapper synthesizes natural-sounding speech from text, running entirely on-device via Metal GPU acceleration. No Python, no cloud APIs, no internet connection required.
@@ -65,35 +63,33 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 ## Features
 
-**Working now (v0.3.0):**
-
 - Full Kokoro-82M inference pipeline in Swift - BERT encoder, duration/prosody prediction, HiFi-GAN decoder, iSTFT
-- 28 built-in voices (American/British, male/female)
+- 28 built-in English voices (American and British, male and female)
+- CLI commands: `speak`, `voices`, `convert` + `yap` shorthand
+- Voice selection: `--voice` flag, `$YAPPER_VOICE` env var, or random per invocation
+- `--dry-run` on both `speak` and `convert`
+- Document conversion: epub, PDF, docx, odt, markdown, HTML, mobi, plain text
+- Audiobook generation with M4B chapter markers and per-chapter voice assignment
+- M4A/MP3 output with ID3 metadata (artist, album, track number, track title)
+- Text cleanup: strips residual markup from pandoc-extracted documents before synthesis
 - Sentence-level text chunking for arbitrarily long input
 - Speed control (0.5x-2.0x)
 - Word-level timestamps
-- Live audio playback via AVAudioEngine
+- Custom pronunciation via inline IPA: `[Name](/phonemes/)`
 - Numerically identical output to [KokoroSwift](https://github.com/mlalma/kokoro-ios) (verified at every pipeline stage)
-
-**In progress:**
-
-- CLI commands (`speak`, `voices`, `convert`)
-- Document conversion (epub, PDF, docx, odt, markdown, HTML, mobi)
-- Audiobook generation with chapter markers (M4B) and per-chapter voice assignment
-- Pronunciation customization (user dictionary, Irish names!, per-project overrides)
-- Clipboard and screen selection reading
+- Homebrew distribution: Developer ID signed, Apple notarised
+- `--non-interactive` flag for scripted/CI usage
 
 **Planned:**
 - iOS support (YapperKit is portable - no macOS-specific APIs)
-- Homebrew formula
 - GUI wrapper
 - Multiple language support
+- Clipboard and screen selection reading
 
 ## Requirements
 
 - macOS 15+ (Sequoia) on Apple Silicon
-- Xcode 16+ with Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`)
-- [Kokoro-82M model weights](#model-setup) (~327MB)
+- [Kokoro-82M model weights](#from-source) (~327 MB, downloaded automatically by Homebrew)
 
 ### Runtime tools (for file conversion only)
 
@@ -104,41 +100,37 @@ Existing Kokoro TTS tools rely on Python runtimes (ONNX, PyTorch) that don't ful
 
 ## Quickstart
 
-### Build
+```bash
+brew install tigger04/tap/yapper
+```
+
+Model weights and 28 English voices are downloaded automatically. The binary is Developer ID signed and Apple notarised.
+
+### From source
+
+For development or if Homebrew is not available. Requires Xcode 26+ with the Metal Toolchain.
 
 ```bash
 git clone https://github.com/tigger04/yapper.git
 cd yapper
 make build
-make install    # symlinks to ~/.local/bin/yapper
+make install    # installs yapper and yap to ~/.local/bin
 ```
 
-### Model setup
-
-Download the Kokoro-82M model weights and at least one voice:
+Source builds require manual download of the model weights and voices:
 
 ```bash
 mkdir -p ~/.local/share/yapper/models ~/.local/share/yapper/voices
 
-# Model weights (~327MB)
+# Model weights (~327 MB)
 curl -L -o ~/.local/share/yapper/models/kokoro-v1_0.safetensors \
   "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/kokoro-v1_0.safetensors"
 
-# Config
-curl -L -o ~/.local/share/yapper/models/config.json \
-  "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/config.json"
-
-# Voices (download as many as you like, ~522KB each)
+# Voices (download as many as you like, ~522 KB each)
 for voice in af_heart af_bella am_adam bf_emma bm_daniel; do
   curl -L -o ~/.local/share/yapper/voices/${voice}.safetensors \
     "https://huggingface.co/mlx-community/Kokoro-82M-bf16/resolve/main/voices/${voice}.safetensors"
 done
-```
-
-### Test
-
-```bash
-make test    # runs 39 regression tests
 ```
 
 ## Architecture
@@ -159,15 +151,39 @@ Sources/
 ├── YapperKit/          # Embeddable TTS library
 │   ├── Engine/         # YapperEngine, TextChunker
 │   ├── Inference/      # Kokoro-82M pipeline (17 files)
-│   ├── Audio/          # AudioPlayer, MelSpectrogram
+│   ├── Audio/          # AudiobookAssembler, MelSpectrogram
 │   ├── Voice/          # VoiceRegistry, Voice types
 │   └── Timestamps/     # WordTimestamp
 └── yapper/             # CLI tool
-    └── Commands/       # speak, voices, convert
+    └── Commands/       # speak, voices, convert + yap (argv[0] dispatch)
 
-Tests/regression/       # 39 regression tests
+Tests/
+├── regression/
+│   ├── YapperKitTests/ # Swift framework tests (88 tests)
+│   └── cli/            # Bash CLI tests (80 tests)
+└── one_off/            # Per-issue verification tests
+
+Formula/                # Homebrew formula (regenerated by make release)
+scripts/                # release.sh, release-models.sh, verify-signature.sh
 docs/                   # VISION, architecture, implementation plan
 ```
+
+## Makefile targets
+
+| Target | Description |
+|---|---|
+| `make build` | Build the project via xcodebuild |
+| `make test` | Run all regression tests (framework + CLI) |
+| `make test-framework` | Run Swift framework tests only |
+| `make test-cli` | Run bash CLI tests only |
+| `make lint` | Run swiftlint |
+| `make install` | Install yapper and yap to ~/.local/bin |
+| `make uninstall` | Remove yapper and yap from ~/.local/bin |
+| `make clean` | Remove build artefacts |
+| `make sync` | Git sync: add, commit, pull, push (submodules first) |
+| `make release` | Run tests, bump version, sign, notarise, tag, push, update Homebrew formula |
+| `make release SKIP_TESTS=1` | Same as above but skip the regression pack |
+| `make release-models` | Package and upload model weights + voices to models-v1 release |
 
 ## Documentation
 

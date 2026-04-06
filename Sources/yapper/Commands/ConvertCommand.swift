@@ -602,7 +602,7 @@ struct ConvertCommand: ParsableCommand {
 
         // Extract the first integer from each filename
         let regex = try? NSRegularExpression(pattern: #"(\d+)"#)
-        var extracted: [Int?] = filenames.map { name in
+        let extracted: [Int?] = filenames.map { name in
             guard let regex,
                   let match = regex.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)),
                   let range = Range(match.range(at: 1), in: name) else {

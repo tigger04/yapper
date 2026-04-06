@@ -4,7 +4,7 @@
 # xcodebuild is required (not swift build) because MLX Swift needs
 # Metal shader compilation, which only Xcode's build system supports.
 
-.PHONY: build test test-framework test-cli test-one-off lint install uninstall clean help release release-models
+.PHONY: build test test-framework test-cli test-one-off lint install uninstall clean help release release-models sync
 
 SCHEME := yapper-Package
 DESTINATION := platform=OS X
@@ -47,11 +47,11 @@ test-framework: lint ## Run framework tests only
 		grep -v "^$$"
 
 test-cli: build ## Run CLI command tests (bash, invokes the built binary)
-	@bash tests/regression/cli/test_speak.sh
-	@bash tests/regression/cli/test_voices.sh
-	@bash tests/regression/cli/test_convert.sh
-	@bash tests/regression/cli/test_convert_delta.sh
-	@bash tests/regression/cli/test_yap.sh
+	@bash Tests/regression/cli/test_speak.sh
+	@bash Tests/regression/cli/test_voices.sh
+	@bash Tests/regression/cli/test_convert.sh
+	@bash Tests/regression/cli/test_convert_delta.sh
+	@bash Tests/regression/cli/test_yap.sh
 
 test-one-off: lint ## Run one-off tests (not part of regression)
 	@xcodebuild build-for-testing -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet
@@ -97,10 +97,26 @@ clean: ## Remove build artefacts
 	swift package clean
 	@xcodebuild clean -scheme $(SCHEME) -destination '$(DESTINATION)' -quiet 2>/dev/null || true
 
+sync: ## Git sync: add, commit, pull, push (submodules first if present)
+	@if [ -f .gitmodules ]; then \
+		git submodule foreach 'git add --all && git diff --cached --quiet || git commit -m "sync: $$(basename $$PWD)" && git pull && git push'; \
+	fi
+	@git add --all
+	@if ! git diff --cached --quiet; then \
+		git commit -m "sync"; \
+	else \
+		echo "Nothing to commit"; \
+	fi
+	@git pull
+	@git push
+
 release-models: ## Package and upload model weights + English voices to models-v1 release
 	@bash scripts/release-models.sh
 
 release: ## Bump version, tag, push, update Homebrew formula (usage: make release [VERSION])
+ifndef SKIP_TESTS
+	@$(MAKE) test
+endif
 	@bash scripts/release.sh $(VERSION)
 
 help: ## Show this help

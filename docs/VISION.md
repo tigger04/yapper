@@ -1,4 +1,4 @@
-<!-- Version: 0.2 | Last updated: 2026-04-02 -->
+<!-- Version: 0.3 | Last updated: 2026-04-06 -->
 
 # Yapper - Vision
 
@@ -85,7 +85,7 @@ Quick single-file conversion: `yapper convert notes.txt -o notes.mp3`
 
 Synthesize and play text directly without writing an intermediate file: `yapper speak "Hello world"` or `echo "some text" | yapper speak`
 
-This streams audio to the system output device in real time via YapperKit's streaming inference - no temp files.
+Synthesizes audio and plays it through the system speakers via afplay.
 
 #### UC4: Stdin streaming
 
@@ -100,7 +100,7 @@ cat document.txt | yapper convert -o output.mp3
 
 User-defined lexicon overrides for names, technical terms, and words the G2P mispronounces.
 
-- **Inline:** `yapper speak "Hello [Tadg](/tæːɡ/)"` - MisakiSwift's markdown-like syntax for one-off corrections
+- **Inline:** `yapper speak "Hello [Taḋg](/taɪɡ/)"` - MisakiSwift's markdown-like syntax for one-off corrections
 - **User dictionary:** `~/.config/yapper/dictionary.txt` - persistent overrides applied automatically, one entry per line: `word /phonemes/`
 - **Per-project:** `.yapper-dictionary` in the working directory, merged with the user dictionary
 
@@ -135,41 +135,41 @@ Key requirements for this use case:
 - Multiple language support (Kokoro supports EN, JA, ZH, DE, FR, and others)
 - Batch/queue processing
 - Opus output format
-- Voice preview / audition
 - Playback speed control (without pitch shift)
 - SSML support
 
-## CLI Interface (draft)
+## CLI Interface
 
 ```
-yapper convert <input> [-o output] [--format m4a|m4b|mp3] [--voice NAME] [--random-voice[=FILTER]] [--speed FLOAT] [--author NAME] [--title NAME] [--dry-run]
-yapper speak [TEXT] [--voice NAME] [--speed FLOAT] [--clipboard] [--selection]
-yapper voices [--list] [--preview NAME]
-yapper version
+yap [TEXT] [--voice NAME] [--speed FLOAT] [--dry-run]
+yapper speak [TEXT] [--voice NAME] [--speed FLOAT] [--dry-run]
+yapper convert <input...> [-o output] [--format m4a|m4b|mp3] [--voice NAME] [--random-voice[=FILTER]] [--speed FLOAT] [--author NAME] [--title NAME] [--dry-run] [--non-interactive]
+yapper voices [--preview NAME]
+yapper --version
 ```
 
-Default output format: M4A for single-file conversion, M4B for multi-chapter audiobooks. MP3 available via `--format mp3`.
+`yap` is shorthand for `yapper speak`. Default output format: M4A for independent files, M4B for multi-chapter audiobooks. MP3 available via `--format mp3`.
 
 ## Voices
 
-Kokoro-82M ships with ~26 built-in voices:
+Kokoro-82M ships with 28 English voices:
 
 - American female: `af_alloy`, `af_aoede`, `af_bella`, `af_heart`, `af_jessica`, `af_kore`, `af_nicole`, `af_nova`, `af_river`, `af_sarah`, `af_sky`
 - American male: `am_adam`, `am_echo`, `am_eric`, `am_liam`, `am_michael`, `am_onyx`, `am_puck`, `am_santa`
 - British female: `bf_alice`, `bf_emma`, `bf_isabella`, `bf_lily`
 - British male: `bm_daniel`, `bm_fable`, `bm_george`, `bm_lewis`
 
-Default voice: `af_heart`. Random voice assignment picks from the full set (or a filtered subset) per chapter.
+Default voice: random per invocation (pinnable via `--voice` flag or `$YAPPER_VOICE` env var). Audiobook mode assigns a random voice per chapter.
 
 ## Dependencies
 
 ### Build-time
-- Swift 5.9+ / Xcode 15+
+- Swift 6.2 / Xcode 26+
 - MLX Swift framework
-- MisakiSwift (G2P)
+- MisakiSwift (G2P, statically linked via fork)
 
 ### Runtime (CLI)
-- macOS 14+ (Sonoma) with Apple Silicon
+- macOS 15+ (Sequoia) on Apple Silicon
 - `pandoc` - document format conversion (docx, odt, md, html)
 - `pdftotext` (poppler) - PDF text extraction
 - `calibre` (`ebook-convert`) - mobi conversion (optional, only for .mobi input)
@@ -190,3 +190,4 @@ Apache 2.0 - Copyright Taḋg Paul
 
 - 0.1 (2026-04-02): Initial vision document
 - 0.2 (2026-04-02): Option C decision (own inference + MisakiSwift), updated foundation table
+- 0.3 (2026-04-06): Updated for current state: afplay not AVAudioEngine, 28 voices, random default, Swift 6.2/Xcode 26+/macOS 15+, CLI interface reflects yap + --non-interactive + --dry-run

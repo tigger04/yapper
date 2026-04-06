@@ -54,15 +54,23 @@ public struct MelSpectrogram {
             var realPart = [Float](repeating: 0, count: nFFT / 2)
             var imagPart = [Float](repeating: 0, count: nFFT / 2)
             windowed.withUnsafeBufferPointer { ptr in
-                var splitComplex = DSPSplitComplex(realp: &realPart, imagp: &imagPart)
-                ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: nFFT / 2) { complexPtr in
-                    vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(nFFT / 2))
+                realPart.withUnsafeMutableBufferPointer { realBuf in
+                    imagPart.withUnsafeMutableBufferPointer { imagBuf in
+                        var splitComplex = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                        ptr.baseAddress!.withMemoryRebound(to: DSPComplex.self, capacity: nFFT / 2) { complexPtr in
+                            vDSP_ctoz(complexPtr, 2, &splitComplex, 1, vDSP_Length(nFFT / 2))
+                        }
+                    }
                 }
             }
 
             // Forward FFT
-            var splitResult = DSPSplitComplex(realp: &realPart, imagp: &imagPart)
-            vDSP_fft_zrip(fftSetup, &splitResult, 1, log2n, FFTDirection(FFT_FORWARD))
+            realPart.withUnsafeMutableBufferPointer { realBuf in
+                imagPart.withUnsafeMutableBufferPointer { imagBuf in
+                    var splitResult = DSPSplitComplex(realp: realBuf.baseAddress!, imagp: imagBuf.baseAddress!)
+                    vDSP_fft_zrip(fftSetup, &splitResult, 1, log2n, FFTDirection(FFT_FORWARD))
+                }
+            }
 
             // Compute magnitude
             for bin in 0..<nBins {

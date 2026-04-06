@@ -53,5 +53,6 @@ let package = Package(
             dependencies: ["YapperKit"],
             path: "Tests/one_off"
         ),
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )
