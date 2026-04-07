@@ -43,8 +43,14 @@ public struct AudiobookAssembler {
         // Step 3: Create ffmetadata
         let metadataFile = tmpDir.appendingPathComponent("metadata.txt")
         var meta = ";FFMETADATA1\n"
-        if let title { meta += "title=\(title)\n" }
-        if let author { meta += "artist=\(author)\n" }
+        if let title {
+            meta += "title=\(title)\n"
+            meta += "album=\(title)\n"
+        }
+        if let author {
+            meta += "artist=\(author)\n"
+            meta += "album_artist=\(author)\n"
+        }
         meta += "\n"
 
         var startMs = 0

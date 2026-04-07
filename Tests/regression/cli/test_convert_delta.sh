@@ -451,4 +451,79 @@ test_RT20_32() {
 }
 run_test "RT-20.32" "multi-file M4B chapter titles match filenames" test_RT20_32
 
+# ---------------------------------------------------------------------------
+# Audit-recommended tests: RT-20.33-20.36
+# ---------------------------------------------------------------------------
+
+# RT-20.33: Real synthesis of markup-heavy file produces output consistent
+# with clean text (not inflated by markup being read aloud).
+# Guards against cleanup only being applied in --dry-run path.
+test_RT20_33() {
+    local dir="${SUITE_TMP}/rt2033"
+    mkdir -p "${dir}"
+    # Clean version: just the text
+    printf 'Hello world.' > "${dir}/clean.txt"
+    # Markup version: same text buried in markup
+    printf '<div>Hello</div> ![img](http://x.com/y.png) world {.class}.' > "${dir}/markup.html"
+    "${YAPPER}" convert "${dir}/clean.txt" -o "${dir}/clean.m4a" --voice af_heart --non-interactive >/dev/null 2>&1
+    "${YAPPER}" convert "${dir}/markup.html" -o "${dir}/markup.m4a" --voice af_heart --non-interactive >/dev/null 2>&1
+    [[ -f "${dir}/clean.m4a" ]] || return 1
+    [[ -f "${dir}/markup.m4a" ]] || return 1
+    local clean_size markup_size
+    clean_size=$(stat -f%z "${dir}/clean.m4a")
+    markup_size=$(stat -f%z "${dir}/markup.m4a")
+    # If markup is being read aloud, the markup file will be significantly larger.
+    # Allow 50% tolerance for encoding variation, but not 3x.
+    local ratio
+    ratio=$(awk "BEGIN{printf \"%.1f\", ${markup_size}/${clean_size}}")
+    awk "BEGIN{exit(${ratio} < 2.0 ? 0 : 1)}"
+}
+run_test "RT-20.33" "real synthesis of markup file is not inflated (cleanup applied)" test_RT20_33
+
+# RT-20.34: Empty bracket pairs [] stripped from dry-run text.
+test_RT20_34() {
+    printf 'Hello [] world [] test.' > "${SUITE_TMP}/rt2034.md"
+    local output
+    output=$("${YAPPER}" convert "${SUITE_TMP}/rt2034.md" --voice af_heart --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -q '\[\]'; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -q "Hello"
+}
+run_test "RT-20.34" "empty brackets [] stripped from dry-run text" test_RT20_34
+
+# RT-20.35: --non-interactive with epub uses extracted metadata silently.
+test_RT20_35() {
+    local epub
+    epub="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../.. && pwd)/Tests/fixtures/test_book.epub"
+    [[ -f "${epub}" ]] || return 1
+    local dir="${SUITE_TMP}/rt2035"
+    mkdir -p "${dir}"
+    # Should complete without prompting and use epub metadata
+    timeout 15 "${YAPPER}" convert "${epub}" --non-interactive --voice af_heart -o "${dir}/book.m4b" >/dev/null 2>&1
+    [[ -f "${dir}/book.m4b" ]] || return 1
+    # Verify extracted metadata was applied (author from epub = "Test Author")
+    local author
+    author=$(ffprobe -v quiet -show_entries format_tags=artist -of csv=p=0 "${dir}/book.m4b" 2>/dev/null)
+    [[ "${author}" == "Test Author" ]]
+}
+run_test "RT-20.35" "--non-interactive epub uses extracted metadata silently" test_RT20_35
+
+# RT-20.36: Multi-file M4B with --author and --title embeds metadata.
+test_RT20_36() {
+    local dir="${SUITE_TMP}/rt2036"
+    mkdir -p "${dir}"
+    printf 'Part one.' > "${dir}/a.txt"
+    printf 'Part two.' > "${dir}/b.txt"
+    "${YAPPER}" convert "${dir}/a.txt" "${dir}/b.txt" --format m4b -o "${dir}/book.m4b" \
+        --author "Meta Author" --title "Meta Title" --voice af_heart --non-interactive >/dev/null 2>&1
+    [[ -f "${dir}/book.m4b" ]] || return 1
+    local artist album
+    artist=$(ffprobe -v quiet -show_entries format_tags=artist -of csv=p=0 "${dir}/book.m4b" 2>/dev/null)
+    album=$(ffprobe -v quiet -show_entries format_tags=album -of csv=p=0 "${dir}/book.m4b" 2>/dev/null)
+    [[ "${artist}" == *"Meta Author"* ]] || return 1
+    [[ "${album}" == *"Meta Title"* ]]
+}
+run_test "RT-20.36" "multi-file M4B embeds author and title metadata" test_RT20_36
+
 summarise "make-audiobook delta"
