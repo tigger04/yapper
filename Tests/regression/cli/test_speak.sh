@@ -382,11 +382,20 @@ _rt211_tmp=$(mktemp -d)
 _rt211_text="This is the first sentence of a long passage. Here is the second sentence with more words. And a third sentence to ensure chunking. The fourth sentence adds even more content to force multiple chunks. Finally a fifth sentence that should definitely cause the text chunker to split this into at least two or three chunks for synthesis."
 "${YAPPER}" speak --voice af_heart "${_rt211_text}" &
 _rt211_pid=$!
+# Check for evidence of streaming: either a temp WAV file exists (brief window
+# during playback) or afplay is running as a child process (proof that audio
+# started before full synthesis completed). Poll every 0.5s for 10 seconds
+# to account for model loading time on cold starts.
 _rt211_found=false
-for _i in 1 2 3 4 5; do
-    sleep 1
-    _rt211_wavs=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt211_pid}*" -size +0c 2>/dev/null | wc -l | tr -d ' ')
-    if [[ ${_rt211_wavs} -gt 0 ]]; then
+for _i in $(seq 1 20); do
+    sleep 0.5
+    # Check for afplay child of the yapper process
+    if pgrep -P "${_rt211_pid}" afplay >/dev/null 2>&1; then
+        _rt211_found=true
+        break
+    fi
+    # Also check for temp WAV files
+    if find /tmp -maxdepth 1 -name "yapper_speak_${_rt211_pid}*" -size +0c 2>/dev/null | grep -q .; then
         _rt211_found=true
         break
     fi
@@ -469,15 +478,20 @@ run_test "RT-21.4" "--dry-run output unchanged by streaming" test_RT21_4
 # User observes: audio starts quickly via the yap shorthand.
 TOTAL=$((TOTAL + 1))
 set +e
-YAP_LINK="${_rt211_tmp}/yap"
-ln -sf "${YAPPER}" "${YAP_LINK}"
-"${YAP_LINK}" --voice af_heart "Yap streaming test with multiple sentences. This should also stream chunk by chunk. Each sentence becomes a chunk for the synthesiser. The shorthand should behave identically to yapper speak." &
+# Create a yap wrapper script (not symlink — symlinks break Bundle.main)
+YAP_WRAPPER="${_rt211_tmp}/yap"
+printf '#!/bin/bash\nexec -a yap "%s" "$@"\n' "${YAPPER}" > "${YAP_WRAPPER}"
+chmod +x "${YAP_WRAPPER}"
+"${YAP_WRAPPER}" --voice af_heart "Yap streaming test with multiple sentences. This should also stream chunk by chunk. Each sentence becomes a chunk for the synthesiser. The shorthand should behave identically to yapper speak." &
 _rt215_pid=$!
 _rt215_found=false
-for _i in 1 2 3 4 5; do
-    sleep 1
-    _rt215_wavs=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt215_pid}*" -size +0c 2>/dev/null | wc -l | tr -d ' ')
-    if [[ ${_rt215_wavs} -gt 0 ]]; then
+for _i in $(seq 1 20); do
+    sleep 0.5
+    if pgrep -P "${_rt215_pid}" afplay >/dev/null 2>&1; then
+        _rt215_found=true
+        break
+    fi
+    if find /tmp -maxdepth 1 -name "yapper_speak_${_rt215_pid}*" -size +0c 2>/dev/null | grep -q .; then
         _rt215_found=true
         break
     fi

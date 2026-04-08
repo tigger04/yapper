@@ -1,10 +1,16 @@
 // ABOUTME: CLI command for live TTS playback through system speakers.
-// ABOUTME: Reads text from argument or stdin, synthesises and plays audio.
+// ABOUTME: Reads text from argument or stdin, synthesises and plays audio via per-chunk streaming.
 
 import ArgumentParser
 import AVFoundation
 import Foundation
 import YapperKit
+
+// Global state for SIGINT handling in the streaming playback path.
+// Must be global because C signal handlers cannot capture Swift context.
+private nonisolated(unsafe) var speakInterrupted = false
+private nonisolated(unsafe) var speakCurrentAfplay: Process?
+private nonisolated(unsafe) var speakPid: Int32 = 0
 
 struct SpeakCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -23,6 +29,9 @@ struct SpeakCommand: ParsableCommand {
 
     @Flag(name: .long, help: "Print resolved voice, speed, and text without performing synthesis.")
     var dryRun: Bool = false
+
+    @Flag(name: .shortAndLong, help: "Suppress progress output.")
+    var quiet: Bool = false
 
     func run() throws {
         let inputText = try resolveInputText()
@@ -45,27 +54,70 @@ struct SpeakCommand: ParsableCommand {
         )
         let selectedVoice = try resolveVoice(registry: engine.voiceRegistry)
 
-        // Synthesise
-        let result = try engine.synthesize(text: inputText, voice: selectedVoice, speed: speed)
+        // Stream synthesis: play each chunk's audio as it completes, so the user
+        // hears the first sentence within seconds regardless of total input length.
+        speakPid = ProcessInfo.processInfo.processIdentifier
+        speakInterrupted = false
+        speakCurrentAfplay = nil
+        let tmpDir = FileManager.default.temporaryDirectory
+        var chunkIndex = 0
 
-        // Write to temp WAV and play via afplay (AVAudioEngine doesn't reliably
-        // produce sound from CLI processes without an audio session)
-        let tmpPath = FileManager.default.temporaryDirectory
-            .appendingPathComponent("yapper_speak_\(ProcessInfo.processInfo.processIdentifier).wav")
-        try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: tmpPath)
-        defer { try? FileManager.default.removeItem(at: tmpPath) }
-
-        let afplay = Process()
-        afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
-        afplay.arguments = [tmpPath.path]
+        // Pre-chunk to get total count for the progress reporter
+        let chunker = TextChunker()
+        let chunks = chunker.chunk(inputText)
+        var reporter = ProgressReporter(totalChunks: chunks.count, quiet: quiet)
 
         signal(SIGINT) { _ in
-            // afplay handles its own cleanup
+            speakInterrupted = true
+            speakCurrentAfplay?.interrupt()
+            // Clean up any temp WAVs for this process
+            let fm = FileManager.default
+            if let files = try? fm.contentsOfDirectory(atPath: NSTemporaryDirectory()) {
+                for file in files where file.hasPrefix("yapper_speak_\(speakPid)") {
+                    try? fm.removeItem(atPath: NSTemporaryDirectory() + file)
+                }
+            }
             _exit(130)
         }
 
-        try afplay.run()
-        afplay.waitUntilExit()
+        try engine.stream(text: inputText, voice: selectedVoice, speed: speed) { chunk in
+            guard !speakInterrupted else { return }
+
+            chunkIndex += 1
+            let chunkText = chunkIndex <= chunks.count ? chunks[chunkIndex - 1].text : ""
+            reporter.update(chunkText: chunkText)
+
+            let tmpPath = tmpDir.appendingPathComponent("yapper_speak_\(speakPid)_\(chunkIndex).wav")
+
+            do {
+                // 24000 Hz is the Kokoro-82M sample rate (matches AudioResult default)
+                try writeWav(samples: chunk.samples, sampleRate: 24000, to: tmpPath)
+
+                let afplay = Process()
+                afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+                afplay.arguments = [tmpPath.path]
+                afplay.standardInput = FileHandle.nullDevice
+                speakCurrentAfplay = afplay
+
+                try afplay.run()
+                afplay.waitUntilExit()
+
+                speakCurrentAfplay = nil
+                try? FileManager.default.removeItem(at: tmpPath)
+            } catch {
+                try? FileManager.default.removeItem(at: tmpPath)
+            }
+        }
+
+        reporter.finish(summary: "")
+
+        // Final cleanup — remove any lingering temp files for this PID
+        let pid = speakPid
+        if let files = try? FileManager.default.contentsOfDirectory(atPath: tmpDir.path) {
+            for file in files where file.hasPrefix("yapper_speak_\(pid)") {
+                try? FileManager.default.removeItem(at: tmpDir.appendingPathComponent(file))
+            }
+        }
     }
 
     private func resolveInputText() throws -> String {

@@ -45,6 +45,9 @@ struct ConvertCommand: ParsableCommand {
     @Flag(name: .long, help: "Skip interactive prompts regardless of TTY state.")
     var nonInteractive: Bool = false
 
+    @Flag(name: .shortAndLong, help: "Suppress progress output.")
+    var quiet: Bool = false
+
     func run() throws {
         guard !inputs.isEmpty else {
             throw ValidationError("No input files specified.")
@@ -325,6 +328,10 @@ struct ConvertCommand: ParsableCommand {
         var successes: [String] = []
         var failures: [String] = []
         for (i, input) in inputs.enumerated() {
+            if inputs.count > 1 {
+                let voiceName = selectedVoice.name
+                ProgressReporter.fileHeader("[\(i + 1)/\(inputs.count)] \(URL(fileURLWithPath: input).lastPathComponent) (\(voiceName))", quiet: quiet)
+            }
             do {
                 try convertSingleFile(
                     input: input,
@@ -344,16 +351,16 @@ struct ConvertCommand: ParsableCommand {
         }
 
         // Batch summary
-        if inputs.count > 1 {
+        if inputs.count > 1 && !quiet {
             if !successes.isEmpty {
                 fputs("\(successes.count) of \(inputs.count) files converted successfully.\n", stderr)
             }
             if !failures.isEmpty {
                 fputs("\(failures.count) of \(inputs.count) files failed:\n", stderr)
                 for f in failures { fputs("  \(f)\n", stderr) }
-                throw ExitCode(1)
             }
-        } else if !failures.isEmpty {
+        }
+        if !failures.isEmpty {
             throw ExitCode(1)
         }
     }
@@ -419,12 +426,28 @@ struct ConvertCommand: ParsableCommand {
             fputs("Backed up existing \(outputPath) to \(backupPath)\n", stderr)
         }
 
-        fputs("Synthesising \(input)...\n", stderr)
-        let result = try engine.synthesize(text: cleaned, voice: voice, speed: speed)
+        // Pre-chunk for progress reporting
+        let chunker = TextChunker()
+        let textChunks = chunker.chunk(cleaned)
+        let fileLabel = URL(fileURLWithPath: input).lastPathComponent
+        ProgressReporter.fileHeader("Synthesising \(fileLabel)...", quiet: quiet)
+        var reporter = ProgressReporter(totalChunks: textChunks.count, quiet: quiet)
+
+        // Synthesise with per-chunk progress
+        var allSamples: [Float] = []
+        var chunkIdx = 0
+        try engine.stream(text: cleaned, voice: voice, speed: speed) { chunk in
+            let chunkText = chunkIdx < textChunks.count ? textChunks[chunkIdx].text : ""
+            chunkIdx += 1
+            reporter.update(chunkText: chunkText)
+            allSamples.append(contentsOf: chunk.samples)
+        }
+        let sampleRate = 24000
+        reporter.finish(summary: "")
 
         let tmpWav = FileManager.default.temporaryDirectory
             .appendingPathComponent("yapper_convert_\(ProcessInfo.processInfo.processIdentifier).wav")
-        try writeWav(samples: result.samples, sampleRate: result.sampleRate, to: tmpWav)
+        try writeWav(samples: allSamples, sampleRate: sampleRate, to: tmpWav)
         defer { try? FileManager.default.removeItem(at: tmpWav) }
 
         try encodeWithFFmpeg(
@@ -438,8 +461,10 @@ struct ConvertCommand: ParsableCommand {
             trackTitle: trackTitle
         )
 
-        let duration = Double(result.samples.count) / Double(result.sampleRate)
-        fputs("Created \(outputPath) (\(String(format: "%.1f", duration))s)\n", stderr)
+        let duration = Double(allSamples.count) / Double(sampleRate)
+        if !quiet {
+            fputs("Created \(outputPath) (\(String(format: "%.1f", duration))s)\n", stderr)
+        }
     }
 
     // MARK: - Voice assignment
