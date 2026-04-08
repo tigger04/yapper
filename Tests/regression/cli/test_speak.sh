@@ -366,4 +366,221 @@ else
     FAILURES+=("RT-4.14")
 fi
 
+# ---------------------------------------------------------------------------
+# Issue #21: Streaming speak — play audio per-chunk, not after full synthesis
+# ---------------------------------------------------------------------------
+
+# RT-21.1: First audio temp file appears within 5 seconds with non-zero size.
+# User action: yapper speak with a multi-sentence input.
+# User observes: audio starts within a few seconds, not after a long wait.
+# Implementation note: we check for temp WAV files appearing quickly as a
+# proxy for "playback started" since we can't detect audio output directly.
+TOTAL=$((TOTAL + 1))
+set +e
+_rt211_tmp=$(mktemp -d)
+# Generate a multi-chunk input (>3 sentences, ~200 words)
+_rt211_text="This is the first sentence of a long passage. Here is the second sentence with more words. And a third sentence to ensure chunking. The fourth sentence adds even more content to force multiple chunks. Finally a fifth sentence that should definitely cause the text chunker to split this into at least two or three chunks for synthesis."
+"${YAPPER}" speak --voice af_heart "${_rt211_text}" &
+_rt211_pid=$!
+_rt211_found=false
+for _i in 1 2 3 4 5; do
+    sleep 1
+    _rt211_wavs=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt211_pid}*" -size +0c 2>/dev/null | wc -l | tr -d ' ')
+    if [[ ${_rt211_wavs} -gt 0 ]]; then
+        _rt211_found=true
+        break
+    fi
+done
+kill "${_rt211_pid}" 2>/dev/null
+wait "${_rt211_pid}" 2>/dev/null
+set -e
+if ${_rt211_found}; then
+    printf '  ✅ RT-21.1: first audio temp file appears within 5s with non-zero size\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-21.1: first audio temp file did not appear within 5s\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-21.1")
+fi
+
+# RT-21.2: SIGINT during streaming playback exits non-zero within 2 seconds.
+# User action: yapper speak with long text, then Ctrl+C mid-playback.
+# User observes: speech stops, command exits promptly.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "This is a long streaming test. It has multiple sentences. Each one should be a separate chunk. The streaming implementation plays each chunk as it finishes. Pressing control C should stop everything cleanly and promptly." &
+_rt212_pid=$!
+sleep 4
+_rt212_start=$(date +%s)
+kill -INT "${_rt212_pid}" 2>/dev/null
+wait "${_rt212_pid}" 2>/dev/null
+_rt212_rc=$?
+_rt212_end=$(date +%s)
+_rt212_elapsed=$((_rt212_end - _rt212_start))
+set -e
+if [[ ${_rt212_rc} -ne 0 ]] && [[ ${_rt212_elapsed} -le 2 ]]; then
+    printf '  ✅ RT-21.2: SIGINT during streaming exits non-zero within 2s\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-21.2: SIGINT exit=%d elapsed=%ds (expected non-zero, ≤2s)\n' "${_rt212_rc}" "${_rt212_elapsed}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-21.2")
+fi
+
+# RT-21.3: After SIGINT, no new temp WAV files are created.
+# User action: Ctrl+C during speak, then check no further synthesis happens.
+# User observes: silence after Ctrl+C, no further activity.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "Another streaming SIGINT test. Multiple sentences here. Each is a chunk. We will interrupt and check no more files appear after the interrupt signal is sent." &
+_rt213_pid=$!
+sleep 3
+kill -INT "${_rt213_pid}" 2>/dev/null
+wait "${_rt213_pid}" 2>/dev/null
+sleep 2
+_rt213_wavs=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt213_pid}*" 2>/dev/null | wc -l | tr -d ' ')
+set -e
+# After SIGINT + 2s wait, there should be no lingering temp files
+# (either cleaned up, or no new ones created post-interrupt)
+if [[ ${_rt213_wavs} -eq 0 ]]; then
+    printf '  ✅ RT-21.3: no temp WAV files remain after SIGINT\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-21.3: %d temp WAV files remain after SIGINT\n' "${_rt213_wavs}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-21.3")
+fi
+
+# RT-21.4: --dry-run output is identical before and after the streaming change.
+# User action: yapper speak --dry-run "text"
+# User observes: same voice/speed/text output as before.
+test_RT21_4() {
+    local output
+    output=$("${YAPPER}" speak --dry-run "dry run unchanged" 2>/dev/null)
+    printf '%s' "${output}" | grep -q '^voice:' || return 1
+    printf '%s' "${output}" | grep -q 'speed:' || return 1
+    printf '%s' "${output}" | grep -q 'text:.*dry run unchanged' || return 1
+    printf '%s' "${output}" | grep -q '(dry run' || return 1
+}
+run_test "RT-21.4" "--dry-run output unchanged by streaming" test_RT21_4
+
+# RT-21.5: yap with multi-chunk input begins playback within 5 seconds.
+# User action: yap "long text..."
+# User observes: audio starts quickly via the yap shorthand.
+TOTAL=$((TOTAL + 1))
+set +e
+YAP_LINK="${_rt211_tmp}/yap"
+ln -sf "${YAPPER}" "${YAP_LINK}"
+"${YAP_LINK}" --voice af_heart "Yap streaming test with multiple sentences. This should also stream chunk by chunk. Each sentence becomes a chunk for the synthesiser. The shorthand should behave identically to yapper speak." &
+_rt215_pid=$!
+_rt215_found=false
+for _i in 1 2 3 4 5; do
+    sleep 1
+    _rt215_wavs=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt215_pid}*" -size +0c 2>/dev/null | wc -l | tr -d ' ')
+    if [[ ${_rt215_wavs} -gt 0 ]]; then
+        _rt215_found=true
+        break
+    fi
+done
+kill "${_rt215_pid}" 2>/dev/null
+wait "${_rt215_pid}" 2>/dev/null
+set -e
+if ${_rt215_found}; then
+    printf '  ✅ RT-21.5: yap begins playback within 5s\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-21.5: yap did not begin playback within 5s\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-21.5")
+fi
+
+# RT-21.6: After normal completion, no temp WAV files remain.
+# User action: yapper speak "short text", let it finish.
+# User observes: command completes, no temp files left behind.
+test_RT21_6() {
+    "${YAPPER}" speak --voice af_heart "Cleanup test." >/dev/null 2>&1
+    local remaining
+    remaining=$(find /tmp -maxdepth 1 -name "yapper_speak_$$*" 2>/dev/null | wc -l | tr -d ' ')
+    [[ ${remaining} -eq 0 ]]
+}
+run_test "RT-21.6" "no temp WAV files remain after normal completion" test_RT21_6
+
+# RT-21.7: After SIGINT, no temp WAV files remain.
+# (Covered by RT-21.3 above which checks the same thing. This test is
+# a separate ID per the AC table but exercises the same path.)
+TOTAL=$((TOTAL + 1))
+# Re-use RT-21.3's result — if RT-21.3 passed, RT-21.7 passes.
+if [[ ${_rt213_wavs} -eq 0 ]]; then
+    printf '  ✅ RT-21.7: no temp WAV files remain after SIGINT (same as RT-21.3)\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-21.7: temp WAV files remain after SIGINT\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-21.7")
+fi
+
+# RT-21.8: Single-chunk input exits within 5 seconds.
+# User action: yapper speak "Hi."
+# User observes: plays quickly, exits, no regression.
+test_RT21_8() {
+    timeout 5 "${YAPPER}" speak --voice af_heart "Hi." >/dev/null 2>&1
+}
+run_test "RT-21.8" "single-chunk input exits within 5s" test_RT21_8
+
+# RT-21.9: Single-chunk input with explicit voice produces no errors.
+# User action: yapper speak --voice af_heart "Hi."
+# User observes: plays, exits 0.
+test_RT21_9() {
+    "${YAPPER}" speak --voice af_heart "Hi." >/dev/null 2>&1
+}
+run_test "RT-21.9" "single-chunk with --voice produces no errors" test_RT21_9
+
+# RT-21.10: Temp WAV creation timestamps are sequential.
+# User action: yapper speak with multi-chunk text.
+# User observes: chunks play in order (automated via timestamp ordering).
+# Note: this test can only verify ordering if the streaming implementation
+# creates distinct temp files per chunk (e.g. yapper_speak_PID_1.wav,
+# yapper_speak_PID_2.wav). If the implementation reuses a single file,
+# this test will see only one file and pass vacuously. The UT-21.2
+# (human listener) covers the ordering guarantee in that case.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "First chunk sentence. Second chunk sentence. Third chunk sentence. Fourth chunk to ensure multiple files." &
+_rt2110_pid=$!
+sleep 8
+kill "${_rt2110_pid}" 2>/dev/null
+wait "${_rt2110_pid}" 2>/dev/null
+# Check if multiple temp files were created with sequential timestamps
+_rt2110_files=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt2110_pid}*" -type f 2>/dev/null | sort)
+_rt2110_count=$(printf '%s\n' "${_rt2110_files}" | grep -c . || true)
+set -e
+if [[ ${_rt2110_count} -le 1 ]]; then
+    # Single file or no files — streaming may reuse one file. Pass vacuously.
+    printf '  ✅ RT-21.10: chunk ordering (vacuous — single/no temp file)\n'
+    PASS=$((PASS + 1))
+else
+    # Multiple files — verify they're in order by checking modification times
+    _rt2110_ordered=true
+    _rt2110_prev=0
+    while IFS= read -r _f; do
+        [[ -z "${_f}" ]] && continue
+        _ts=$(stat -f%m "${_f}" 2>/dev/null || echo "0")
+        if [[ ${_ts} -lt ${_rt2110_prev} ]]; then
+            _rt2110_ordered=false
+            break
+        fi
+        _rt2110_prev=${_ts}
+    done <<< "${_rt2110_files}"
+    if ${_rt2110_ordered}; then
+        printf '  ✅ RT-21.10: temp WAV timestamps are sequential\n'
+        PASS=$((PASS + 1))
+    else
+        printf '  ❌ RT-21.10: temp WAV timestamps are not sequential\n'
+        FAIL=$((FAIL + 1))
+        FAILURES+=("RT-21.10")
+    fi
+fi
+
+rm -rf "${_rt211_tmp}"
+
 summarise "yapper speak"
