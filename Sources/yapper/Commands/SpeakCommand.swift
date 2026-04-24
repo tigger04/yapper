@@ -54,15 +54,15 @@ struct SpeakCommand: ParsableCommand {
         )
         let selectedVoice = try resolveVoice(registry: engine.voiceRegistry)
 
-        // Stream synthesis: play each chunk's audio as it completes, so the user
-        // hears the first sentence within seconds regardless of total input length.
+        // Look-ahead synthesis: synthesise chunk N+1 while chunk N plays.
+        // Eliminates the audible gaps between chunks that occurred when synthesis
+        // and playback were sequential.
         speakPid = ProcessInfo.processInfo.processIdentifier
         speakInterrupted = false
         speakCurrentAfplay = nil
         let tmpDir = FileManager.default.temporaryDirectory
-        var chunkIndex = 0
 
-        // Pre-chunk to get total count for the progress reporter
+        // Pre-chunk for progress reporter and look-ahead coordination
         let chunker = TextChunker()
         let chunks = chunker.chunk(inputText)
         var reporter = ProgressReporter(totalChunks: chunks.count, quiet: quiet)
@@ -70,7 +70,6 @@ struct SpeakCommand: ParsableCommand {
         signal(SIGINT) { _ in
             speakInterrupted = true
             speakCurrentAfplay?.interrupt()
-            // Clean up any temp WAVs for this process
             let fm = FileManager.default
             if let files = try? fm.contentsOfDirectory(atPath: NSTemporaryDirectory()) {
                 for file in files where file.hasPrefix("yapper_speak_\(speakPid)") {
@@ -80,32 +79,122 @@ struct SpeakCommand: ParsableCommand {
             _exit(130)
         }
 
-        try engine.stream(text: inputText, voice: selectedVoice, speed: speed) { chunk in
-            guard !speakInterrupted else { return }
+        // For single-chunk input, no look-ahead needed — synthesise and play directly
+        if chunks.count <= 1 {
+            try engine.stream(text: inputText, voice: selectedVoice, speed: speed) { chunk in
+                guard !speakInterrupted else { return }
+                reporter.update(chunkText: chunks.first?.text ?? "")
+                let tmpPath = tmpDir.appendingPathComponent("yapper_speak_\(speakPid)_1.wav")
+                do {
+                    try writeWav(samples: chunk.samples, sampleRate: 24000, to: tmpPath)
+                    let afplay = Process()
+                    afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+                    afplay.arguments = [tmpPath.path]
+                    afplay.standardInput = FileHandle.nullDevice
+                    speakCurrentAfplay = afplay
+                    try afplay.run()
+                    afplay.waitUntilExit()
+                    speakCurrentAfplay = nil
+                    try? FileManager.default.removeItem(at: tmpPath)
+                } catch {
+                    try? FileManager.default.removeItem(at: tmpPath)
+                }
+            }
+        } else {
+            // Multi-chunk: producer-consumer with look-ahead of 1.
+            // Synthesis thread calls engine.stream() which produces chunks sequentially.
+            // Each chunk's WAV is handed to the main thread for playback.
+            // While the main thread plays chunk N, the synthesis thread is already
+            // producing chunk N+1.
+            nonisolated(unsafe) var synthesisError: Error? = nil
+            nonisolated(unsafe) var chunkIndex = 0
+            nonisolated(unsafe) var reporterCopy = reporter
 
-            chunkIndex += 1
-            let chunkText = chunkIndex <= chunks.count ? chunks[chunkIndex - 1].text : ""
-            reporter.update(chunkText: chunkText)
+            // Synchronisation: ready = "a WAV is available", consumed = "playback took it"
+            let readySemaphore = DispatchSemaphore(value: 0)
+            let consumedSemaphore = DispatchSemaphore(value: 1)
+            nonisolated(unsafe) var nextWavPath: URL?
 
-            let tmpPath = tmpDir.appendingPathComponent("yapper_speak_\(speakPid)_\(chunkIndex).wav")
+            let synthQueue = DispatchQueue(label: "yapper.speak.synthesis")
+            nonisolated(unsafe) let engineRef = engine
+            let voiceRef = selectedVoice
+            let speedVal = speed
+            let inputRef = inputText
+            let chunksRef = chunks
+            synthQueue.async {
+                do {
+                    var isFirstChunk = true
+                    try engineRef.stream(text: inputRef, voice: voiceRef, speed: speedVal) { chunk in
+                        guard !speakInterrupted else { return }
 
-            do {
-                // 24000 Hz is the Kokoro-82M sample rate (matches AudioResult default)
-                try writeWav(samples: chunk.samples, sampleRate: 24000, to: tmpPath)
+                        chunkIndex += 1
+                        let chunkText = chunkIndex <= chunksRef.count ? chunksRef[chunkIndex - 1].text : ""
+                        // Update progress at synthesis-start
+                        reporterCopy.update(chunkText: chunkText)
 
-                let afplay = Process()
-                afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
-                afplay.arguments = [tmpPath.path]
-                afplay.standardInput = FileHandle.nullDevice
-                speakCurrentAfplay = afplay
+                        let wavPath = tmpDir.appendingPathComponent(
+                            "yapper_speak_\(speakPid)_\(chunkIndex).wav")
+                        do {
+                            try self.writeWav(samples: chunk.samples, sampleRate: 24000, to: wavPath)
 
-                try afplay.run()
-                afplay.waitUntilExit()
+                            if isFirstChunk {
+                                // First chunk: no previous chunk to wait for
+                                isFirstChunk = false
+                                nextWavPath = wavPath
+                                readySemaphore.signal()
+                            } else {
+                                // Wait for consumer to take the previous chunk, then offer this one
+                                consumedSemaphore.wait()
+                                nextWavPath = wavPath
+                                readySemaphore.signal()
+                            }
+                        } catch {
+                            synthesisError = error
+                            readySemaphore.signal()
+                        }
+                    }
+                } catch {
+                    synthesisError = error
+                }
 
-                speakCurrentAfplay = nil
-                try? FileManager.default.removeItem(at: tmpPath)
-            } catch {
-                try? FileManager.default.removeItem(at: tmpPath)
+                // Signal end-of-stream
+                consumedSemaphore.wait()
+                nextWavPath = nil
+                readySemaphore.signal()
+            }
+
+            // Main thread: play WAV files as they become available
+            while !speakInterrupted {
+                readySemaphore.wait()
+                guard let wavPath = nextWavPath else {
+                    consumedSemaphore.signal()
+                    break
+                }
+
+                do {
+                    let afplay = Process()
+                    afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+                    afplay.arguments = [wavPath.path]
+                    afplay.standardInput = FileHandle.nullDevice
+                    speakCurrentAfplay = afplay
+
+                    // Release producer to start next chunk while this one plays
+                    consumedSemaphore.signal()
+
+                    try afplay.run()
+                    afplay.waitUntilExit()
+
+                    speakCurrentAfplay = nil
+                    try? FileManager.default.removeItem(at: wavPath)
+                } catch {
+                    consumedSemaphore.signal()
+                    try? FileManager.default.removeItem(at: wavPath)
+                    break
+                }
+            }
+
+            if let error = synthesisError {
+                throw error
             }
         }
 
