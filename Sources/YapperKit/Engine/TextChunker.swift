@@ -24,9 +24,36 @@ public class TextChunker {
 
     /// Split text into chunks that fit within the 510-token budget.
     ///
+    /// Paragraph breaks (blank lines) are treated as mandatory chunk boundaries
+    /// so that the model preserves natural pauses between paragraphs. Within
+    /// each paragraph, sentences are packed to the token limit.
+    ///
     /// - Parameter text: Input text of any length.
     /// - Returns: Array of TextChunks, each within the token limit.
     public func chunk(_ text: String) -> [TextChunk] {
+        // Split into paragraphs first (blank lines), then chunk within each
+        let paragraphs = text.components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !paragraphs.isEmpty else { return [] }
+
+        // If there's only one paragraph (no blank lines), fall through to
+        // sentence-level chunking directly
+        if paragraphs.count == 1 {
+            return chunkParagraph(paragraphs[0])
+        }
+
+        // Multiple paragraphs: chunk each one independently
+        var allChunks: [TextChunk] = []
+        for paragraph in paragraphs {
+            allChunks.append(contentsOf: chunkParagraph(paragraph))
+        }
+        return allChunks
+    }
+
+    /// Chunk a single paragraph (no blank lines) at sentence boundaries.
+    private func chunkParagraph(_ text: String) -> [TextChunk] {
         let sentences = splitSentences(text)
 
         guard !sentences.isEmpty else {

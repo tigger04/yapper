@@ -101,19 +101,22 @@ struct SpeakCommand: ParsableCommand {
                 }
             }
         } else {
-            // Multi-chunk: producer-consumer with look-ahead of 1.
-            // Synthesis thread calls engine.stream() which produces chunks sequentially.
-            // Each chunk's WAV is handed to the main thread for playback.
-            // While the main thread plays chunk N, the synthesis thread is already
-            // producing chunk N+1.
+            // Look-ahead synthesis with a pre-fill buffer.
+            // Synthesise the first N chunks before starting playback, building a
+            // buffer that absorbs synthesis time variability. Then continue
+            // synthesising ahead while playback runs. Playback never catches up
+            // to synthesis unless a single chunk takes longer than the entire
+            // buffer's audio duration.
+            let bufferSize = min(3, chunks.count)
             nonisolated(unsafe) var synthesisError: Error? = nil
             nonisolated(unsafe) var chunkIndex = 0
             nonisolated(unsafe) var reporterCopy = reporter
 
-            // Synchronisation: ready = "a WAV is available", consumed = "playback took it"
-            let readySemaphore = DispatchSemaphore(value: 0)
-            let consumedSemaphore = DispatchSemaphore(value: 1)
-            nonisolated(unsafe) var nextWavPath: URL?
+            // Thread-safe FIFO queue of ready WAV paths
+            let queueLock = NSLock()
+            nonisolated(unsafe) var wavQueue: [URL] = []
+            let itemAvailable = DispatchSemaphore(value: 0)
+            nonisolated(unsafe) var producerDone = false
 
             let synthQueue = DispatchQueue(label: "yapper.speak.synthesis")
             nonisolated(unsafe) let engineRef = engine
@@ -121,52 +124,93 @@ struct SpeakCommand: ParsableCommand {
             let speedVal = speed
             let inputRef = inputText
             let chunksRef = chunks
+
+            // Show first chunk text before synthesis starts
+            if !chunks.isEmpty {
+                reporterCopy.update(chunkText: chunksRef[0].text)
+            }
+
             synthQueue.async {
                 do {
                     try engineRef.stream(text: inputRef, voice: voiceRef, speed: speedVal) { chunk in
                         guard !speakInterrupted else { return }
 
                         chunkIndex += 1
-
-                        // Update progress immediately — this chunk just finished synthesis
-                        // and the next one is about to start. Show the text that was just
-                        // synthesised so the user sees it while it plays.
-                        let chunkText = chunkIndex <= chunksRef.count ? chunksRef[chunkIndex - 1].text : ""
-                        reporterCopy.update(chunkText: chunkText)
-
                         let wavPath = tmpDir.appendingPathComponent(
                             "yapper_speak_\(speakPid)_\(chunkIndex).wav")
                         do {
                             try self.writeWav(samples: chunk.samples, sampleRate: 24000, to: wavPath)
+                            queueLock.lock()
+                            wavQueue.append(wavPath)
+                            queueLock.unlock()
+                            itemAvailable.signal()
 
-                            // Standard producer-consumer: wait for consumer to take
-                            // the previous chunk before offering this one.
-                            // consumedSemaphore starts at 1, so the first chunk
-                            // proceeds immediately.
-                            consumedSemaphore.wait()
-                            nextWavPath = wavPath
-                            readySemaphore.signal()
+                            // Show the NEXT chunk's text (about to be synthesised)
+                            if chunkIndex < chunksRef.count {
+                                reporterCopy.update(chunkText: chunksRef[chunkIndex].text)
+                            }
                         } catch {
                             synthesisError = error
-                            readySemaphore.signal()
+                            itemAvailable.signal()
                         }
                     }
                 } catch {
                     synthesisError = error
                 }
 
-                // Signal end-of-stream
-                consumedSemaphore.wait()
-                nextWavPath = nil
-                readySemaphore.signal()
+                producerDone = true
+                itemAvailable.signal()
             }
 
-            // Main thread: play WAV files as they become available
+            // Main thread: wait for buffer to fill, then start playback
+            var buffered = 0
+            while buffered < bufferSize && !speakInterrupted {
+                itemAvailable.wait()
+                queueLock.lock()
+                let ready = wavQueue.count
+                queueLock.unlock()
+                if ready > buffered {
+                    buffered = ready
+                }
+                if producerDone || synthesisError != nil { break }
+            }
+
+            // Play from the queue — producer continues filling it
             while !speakInterrupted {
-                readySemaphore.wait()
-                guard let wavPath = nextWavPath else {
-                    consumedSemaphore.signal()
-                    break
+                // Try to get the next WAV from the queue
+                queueLock.lock()
+                let wavPath = wavQueue.isEmpty ? nil : wavQueue.removeFirst()
+                queueLock.unlock()
+
+                guard let wavPath else {
+                    // Queue empty — wait for producer or end-of-stream
+                    if producerDone { break }
+                    itemAvailable.wait()
+                    if producerDone {
+                        // Drain remaining items
+                        queueLock.lock()
+                        let remaining = wavQueue
+                        wavQueue.removeAll()
+                        queueLock.unlock()
+                        for wav in remaining {
+                            guard !speakInterrupted else { break }
+                            do {
+                                let afplay = Process()
+                                afplay.executableURL = URL(fileURLWithPath: "/usr/bin/afplay")
+                                afplay.arguments = [wav.path]
+                                afplay.standardInput = FileHandle.nullDevice
+                                speakCurrentAfplay = afplay
+                                try afplay.run()
+                                afplay.waitUntilExit()
+                                speakCurrentAfplay = nil
+                                try? FileManager.default.removeItem(at: wav)
+                            } catch {
+                                try? FileManager.default.removeItem(at: wav)
+                            }
+                        }
+                        break
+                    }
+                    continue
                 }
 
                 do {
@@ -175,17 +219,11 @@ struct SpeakCommand: ParsableCommand {
                     afplay.arguments = [wavPath.path]
                     afplay.standardInput = FileHandle.nullDevice
                     speakCurrentAfplay = afplay
-
-                    // Release producer to start next chunk while this one plays
-                    consumedSemaphore.signal()
-
                     try afplay.run()
                     afplay.waitUntilExit()
-
                     speakCurrentAfplay = nil
                     try? FileManager.default.removeItem(at: wavPath)
                 } catch {
-                    consumedSemaphore.signal()
                     try? FileManager.default.removeItem(at: wavPath)
                     break
                 }

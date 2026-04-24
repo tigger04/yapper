@@ -37,7 +37,7 @@ struct ProgressReporter {
             .replacingOccurrences(of: "\n", with: " ")
             .trimmingCharacters(in: .whitespaces)
         if displayText.count > Self.textMaxLen {
-            displayText = "..." + displayText.suffix(Self.textMaxLen - 3)
+            displayText = String(displayText.prefix(Self.textMaxLen - 3)) + "..."
         }
 
         // Overwrite the two lines in place
