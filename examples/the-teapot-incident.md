@@ -1,0 +1,163 @@
+# The Teapot Incident
+
+*by A. N. Onymous*
+
+| Character | Description                                      |
+|-----------|--------------------------------------------------|
+| GERALD    | A retired postman. Sixties. Perpetually confused. |
+| MOIRA     | Gerald's neighbour. Fifties. Opinioned.           |
+| DEREK     | A plumber. Thirties. Philosophically inclined.    |
+| SUSAN     | Moira's cat. Played by a human in a cardigan.     |
+
+## ACT I
+
+### Scene 1: The Kitchen
+
+*A kitchen. Morning. One working tap. A teapot on the counter, lid missing. GERALD stands at the counter staring at the teapot.*
+
+**GERALD:**
+It was here yesterday.
+
+*MOIRA enters through the back door without knocking.*
+
+**MOIRA:**
+What was.
+
+**GERALD:**
+The lid.
+
+**MOIRA:**
+To what.
+
+**GERALD:**
+The teapot.
+
+**MOIRA:**
+That teapot hasn't had a lid since 1997.
+
+**GERALD:**
+It had one yesterday. I remember distinctly.
+
+**MOIRA:**
+You remember distinctly having toast in 1983. That doesn't make it true.
+
+**GERALD:**
+That was memorable toast.
+
+*DEREK enters from the hall carrying a wrench and a philosophy textbook.*
+
+**DEREK:**
+Your tap's fixed.
+
+**GERALD:**
+Which one.
+
+**DEREK:**
+The one that works.
+
+**GERALD:**
+That's the one that didn't need fixing.
+
+**DEREK:**
+It does now.
+
+*SUSAN enters and sits on the table.*
+
+**MOIRA:**
+Susan agrees with me.
+
+**GERALD:**
+Susan is a cat.
+
+**MOIRA:**
+Susan has instincts.
+
+**DEREK:**
+If a teapot loses its lid in a kitchen and nobody remembers it, was it ever really lidded.
+
+**GERALD:**
+Yes. It was lidded. I put tea in it.
+
+**DEREK:**
+But did the tea know.
+
+**MOIRA:**
+The tea doesn't need to know.
+
+**DEREK:**
+I think you'll find it does.
+
+*GERALD picks up the teapot and turns it upside down. Nothing comes out.*
+
+**GERALD:**
+There's no tea in it.
+
+**MOIRA:**
+There's never tea in it.
+
+**GERALD:**
+Then what's the point of the lid.
+
+**DEREK:**
+Now you're asking the right questions.
+
+### Scene 2: The Garden
+
+*The garden. Afternoon. A garden table with three mismatched chairs. DEREK is reading. MOIRA is pruning something that doesn't need pruning.*
+
+**MOIRA:**
+He's been looking for that lid for three hours.
+
+**DEREK:**
+Has he tried the obvious place.
+
+**MOIRA:**
+He's tried every place except the obvious place. That's his method.
+
+*GERALD appears at the back door holding a saucepan lid.*
+
+**GERALD:**
+Found it.
+
+**MOIRA:**
+That's a saucepan lid.
+
+**GERALD:**
+It fits.
+
+**MOIRA:**
+A shoe fits in a letterbox. That doesn't make it post.
+
+**DEREK:**
+Actually that raises an interesting question about the nature of fitness.
+
+**MOIRA:**
+It doesn't.
+
+**DEREK:**
+If a lid fits a teapot, and the teapot accepts it, who are we to say it's wrong.
+
+**GERALD:**
+Exactly.
+
+**MOIRA:**
+You're both ridiculous.
+
+*SUSAN jumps onto the table and knocks over DEREK's book.*
+
+**DEREK:**
+Susan has made her point.
+
+**MOIRA:**
+Susan always makes her point.
+
+**GERALD:**
+I'm putting the kettle on.
+
+**MOIRA:**
+The kettle doesn't have a lid either.
+
+**GERALD:**
+I know. I'm using the teapot.
+
+*Blackout.*

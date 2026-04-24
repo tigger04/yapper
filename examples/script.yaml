@@ -1,0 +1,10 @@
+title: "The Teapot Incident"
+author: "A. N. Onymous"
+auto-assign-voices: true
+read-stage-directions: true
+narrator-voice: bf_lily
+character-voices:
+  GERALD: bm_george
+  MOIRA: bf_emma
+  DEREK: am_adam
+  SUSAN: af_sky
