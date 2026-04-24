@@ -123,13 +123,15 @@ struct SpeakCommand: ParsableCommand {
             let chunksRef = chunks
             synthQueue.async {
                 do {
-                    var isFirstChunk = true
                     try engineRef.stream(text: inputRef, voice: voiceRef, speed: speedVal) { chunk in
                         guard !speakInterrupted else { return }
 
                         chunkIndex += 1
+
+                        // Update progress immediately — this chunk just finished synthesis
+                        // and the next one is about to start. Show the text that was just
+                        // synthesised so the user sees it while it plays.
                         let chunkText = chunkIndex <= chunksRef.count ? chunksRef[chunkIndex - 1].text : ""
-                        // Update progress at synthesis-start
                         reporterCopy.update(chunkText: chunkText)
 
                         let wavPath = tmpDir.appendingPathComponent(
@@ -137,17 +139,13 @@ struct SpeakCommand: ParsableCommand {
                         do {
                             try self.writeWav(samples: chunk.samples, sampleRate: 24000, to: wavPath)
 
-                            if isFirstChunk {
-                                // First chunk: no previous chunk to wait for
-                                isFirstChunk = false
-                                nextWavPath = wavPath
-                                readySemaphore.signal()
-                            } else {
-                                // Wait for consumer to take the previous chunk, then offer this one
-                                consumedSemaphore.wait()
-                                nextWavPath = wavPath
-                                readySemaphore.signal()
-                            }
+                            // Standard producer-consumer: wait for consumer to take
+                            // the previous chunk before offering this one.
+                            // consumedSemaphore starts at 1, so the first chunk
+                            // proceeds immediately.
+                            consumedSemaphore.wait()
+                            nextWavPath = wavPath
+                            readySemaphore.signal()
                         } catch {
                             synthesisError = error
                             readySemaphore.signal()
