@@ -526,4 +526,40 @@ test_RT20_36() {
 }
 run_test "RT-20.36" "multi-file M4B embeds author and title metadata" test_RT20_36
 
+# ---------------------------------------------------------------------------
+# Issue #22: Look-ahead synthesis — convert mode benefits
+# ---------------------------------------------------------------------------
+
+# RT-22.10: Convert wall-clock time is not inflated by pipelining overhead.
+# User action: yapper convert multi-sentence file.
+# User observes: fast conversion, no slower than before.
+test_RT22_10() {
+    local dir="${SUITE_TMP}/rt2210"
+    mkdir -p "${dir}"
+    printf 'First sentence of convert pipelining test. Second sentence with more words. Third sentence for good measure. Fourth sentence extends the text further. Fifth sentence wraps up.' > "${dir}/input.txt"
+    local start end elapsed
+    start=$(date +%s)
+    "${YAPPER}" convert "${dir}/input.txt" -o "${dir}/output.m4a" --voice af_heart --non-interactive --quiet >/dev/null 2>&1
+    end=$(date +%s)
+    elapsed=$((end - start))
+    # Convert should finish within 15 seconds for this input — pipelining
+    # should not add overhead since convert writes to file, not to speakers.
+    [[ -f "${dir}/output.m4a" ]] && [[ ${elapsed} -lt 15 ]]
+}
+run_test "RT-22.10" "convert wall-clock time not inflated by pipelining" test_RT22_10
+
+# RT-22.11: Progress updates in convert mode occur at synthesis-start.
+# User action: yapper convert multi-sentence file.
+# User observes: progress text changes as each chunk begins synthesis.
+test_RT22_11() {
+    local dir="${SUITE_TMP}/rt2211"
+    mkdir -p "${dir}"
+    printf 'Alpha sentence for progress. Beta sentence for testing. Gamma sentence for verification.' > "${dir}/input.txt"
+    local stderr_output
+    stderr_output=$("${YAPPER}" convert "${dir}/input.txt" -o "${dir}/output.m4a" --voice af_heart --non-interactive 2>&1 1>/dev/null)
+    # Progress output should contain text from the input
+    printf '%s' "${stderr_output}" | grep -qi "sentence\|Alpha\|Gamma"
+}
+run_test "RT-22.11" "convert progress updates at synthesis-start" test_RT22_11
+
 summarise "make-audiobook delta"

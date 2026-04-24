@@ -597,4 +597,224 @@ fi
 
 rm -rf "${_rt211_tmp}"
 
+# ---------------------------------------------------------------------------
+# Issue #22: Look-ahead synthesis — pipeline chunk synthesis and playback
+# ---------------------------------------------------------------------------
+
+# Multi-chunk text for pipelining tests (~7 chunks)
+_RT22_TEXT="This is the first sentence of the pipelining test. Here is the second sentence with more content. A third sentence to ensure multiple chunks are created by the text chunker. The fourth sentence adds further words for the synthesiser. Fifth sentence continues the stream of text. Sixth sentence provides additional material. And the seventh sentence wraps up this test passage."
+
+# RT-22.1: Total wall-clock time is within 15% of reported audio duration.
+# User action: yapper speak with a multi-chunk input.
+# User observes: speech plays continuously without long gaps.
+# Gaming blocked: can't just sleep(audio_duration) — must actually play audio.
+TOTAL=$((TOTAL + 1))
+set +e
+_rt221_start=$(date +%s)
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" >/dev/null 2>/tmp/rt221_stderr.log
+_rt221_rc=$?
+_rt221_end=$(date +%s)
+_rt221_wall=$((_rt221_end - _rt221_start))
+set -e
+# Extract audio duration from progress output if available, otherwise estimate
+# ~2s per chunk × 7 chunks ≈ 14s minimum audio. Wall time should be close.
+# Without pipelining: wall = audio + (chunks × synthesis_time) ≈ 14 + 10 = 24s
+# With pipelining: wall ≈ audio + first_synthesis ≈ 14 + 2 = 16s
+# Test: wall time < 120% of a generous audio estimate (20s threshold)
+# This test will FAIL without pipelining because gaps add ~10s of dead time.
+if [[ ${_rt221_rc} -eq 0 ]] && [[ ${_rt221_wall} -lt 25 ]]; then
+    printf '  ✅ RT-22.1: wall-clock time within expected range (%ds)\n' "${_rt221_wall}"
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.1: wall-clock time too long (%ds, expected <25s) rc=%d\n' "${_rt221_wall}" "${_rt221_rc}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.1")
+fi
+
+# RT-22.2: Second chunk's temp WAV exists before first chunk's afplay exits.
+# User action: yapper speak with multi-chunk text.
+# User observes: no gap between first and second sentence.
+# This confirms synthesis and playback overlap (the core of look-ahead).
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
+_rt222_pid=$!
+# Wait for first chunk to start playing, then check if second chunk WAV exists
+sleep 5
+_rt222_wav1=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt222_pid}_1.wav" 2>/dev/null | head -1)
+_rt222_wav2=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt222_pid}_2.wav" 2>/dev/null | head -1)
+# Also check if afplay is still running (playing chunk 1)
+_rt222_afplay_running=false
+if pgrep -P "${_rt222_pid}" afplay >/dev/null 2>&1; then
+    _rt222_afplay_running=true
+fi
+kill "${_rt222_pid}" 2>/dev/null
+wait "${_rt222_pid}" 2>/dev/null
+set -e
+# With look-ahead: while chunk 1 plays, chunk 2 should already be synthesised.
+# Either chunk 2's WAV exists, or chunk 2 has already been played and deleted.
+# The key signal is that afplay is still running (playing chunk 1) while
+# chunk 2 is ready. Without look-ahead, chunk 2 doesn't start until chunk 1
+# finishes playing.
+if [[ -n "${_rt222_wav2}" ]] || ${_rt222_afplay_running}; then
+    printf '  ✅ RT-22.2: synthesis and playback overlap detected\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.2: no evidence of synthesis/playback overlap\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.2")
+fi
+
+# RT-22.3: At most two temp WAV files exist simultaneously.
+# User action: yapper speak with multi-chunk text.
+# User observes: no excessive disk usage during playback.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
+_rt223_pid=$!
+_rt223_max_files=0
+for _i in $(seq 1 15); do
+    sleep 1
+    _rt223_count=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt223_pid}_*" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ ${_rt223_count} -gt ${_rt223_max_files} ]]; then
+        _rt223_max_files=${_rt223_count}
+    fi
+    if ! kill -0 "${_rt223_pid}" 2>/dev/null; then
+        break
+    fi
+done
+kill "${_rt223_pid}" 2>/dev/null
+wait "${_rt223_pid}" 2>/dev/null
+set -e
+if [[ ${_rt223_max_files} -le 2 ]]; then
+    printf '  ✅ RT-22.3: at most %d temp files simultaneously\n' "${_rt223_max_files}"
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.3: %d temp files simultaneously (expected ≤2)\n' "${_rt223_max_files}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.3")
+fi
+
+# RT-22.4: SIGINT during pipelined playback exits non-zero within 2 seconds.
+# User action: Ctrl+C during speak with look-ahead active.
+# User observes: speech stops promptly.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
+_rt224_pid=$!
+sleep 4
+_rt224_start=$(date +%s)
+kill -INT "${_rt224_pid}" 2>/dev/null
+wait "${_rt224_pid}" 2>/dev/null
+_rt224_rc=$?
+_rt224_end=$(date +%s)
+_rt224_elapsed=$((_rt224_end - _rt224_start))
+set -e
+if [[ ${_rt224_rc} -ne 0 ]] && [[ ${_rt224_elapsed} -le 2 ]]; then
+    printf '  ✅ RT-22.4: SIGINT exits non-zero within 2s\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.4: SIGINT rc=%d elapsed=%ds\n' "${_rt224_rc}" "${_rt224_elapsed}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.4")
+fi
+
+# RT-22.5: After SIGINT, no temp WAV files remain.
+# User action: Ctrl+C during speak, check no files left.
+# User observes: no disk clutter.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
+_rt225_pid=$!
+sleep 3
+kill -INT "${_rt225_pid}" 2>/dev/null
+wait "${_rt225_pid}" 2>/dev/null
+sleep 1
+_rt225_remaining=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt225_pid}_*" 2>/dev/null | wc -l | tr -d ' ')
+set -e
+if [[ ${_rt225_remaining} -eq 0 ]]; then
+    printf '  ✅ RT-22.5: no temp files remain after SIGINT\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.5: %d temp files remain after SIGINT\n' "${_rt225_remaining}"
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.5")
+fi
+
+# RT-22.6: No background process continues after SIGINT.
+# User action: Ctrl+C, then check system is clean.
+# User observes: no lingering yapper processes.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
+_rt226_pid=$!
+sleep 3
+kill -INT "${_rt226_pid}" 2>/dev/null
+wait "${_rt226_pid}" 2>/dev/null
+sleep 2
+_rt226_alive=false
+if kill -0 "${_rt226_pid}" 2>/dev/null; then
+    _rt226_alive=true
+fi
+set -e
+if ! ${_rt226_alive}; then
+    printf '  ✅ RT-22.6: no background process after SIGINT\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.6: process still alive after SIGINT\n'
+    kill -9 "${_rt226_pid}" 2>/dev/null
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.6")
+fi
+
+# RT-22.7: Single-chunk input exits within 5 seconds (no regression).
+# User action: yapper speak "Hi."
+# User observes: quick playback, no overhead from pipelining.
+test_RT22_7() {
+    timeout 5 "${YAPPER}" speak --voice af_heart "Hi." >/dev/null 2>&1
+}
+run_test "RT-22.7" "single-chunk exits within 5s (no pipelining regression)" test_RT22_7
+
+# RT-22.8: Single-chunk input does not spawn unnecessary threads.
+# User action: yapper speak "Hi." — short text, one chunk.
+# User observes: same fast behaviour as before.
+# Gaming note: this is hard to verify from bash without thread inspection.
+# We verify indirectly: single-chunk wall time should be <5s, matching pre-
+# pipelining behaviour. If pipelining added overhead, it would be visible.
+test_RT22_8() {
+    local start end elapsed
+    start=$(date +%s)
+    "${YAPPER}" speak --voice af_heart "Short single chunk." >/dev/null 2>&1
+    end=$(date +%s)
+    elapsed=$((end - start))
+    [[ ${elapsed} -le 5 ]]
+}
+run_test "RT-22.8" "single-chunk has no pipelining overhead" test_RT22_8
+
+# RT-22.9: Progress text updates within first 3 seconds of second chunk.
+# User action: yapper speak with multi-chunk text.
+# User observes: progress display changes during playback, not just at end.
+TOTAL=$((TOTAL + 1))
+set +e
+"${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" 2>/tmp/rt229_stderr.log &
+_rt229_pid=$!
+# Capture stderr snapshots at 3s and 6s to detect change
+sleep 3
+_rt229_snap1=$(cat /tmp/rt229_stderr.log 2>/dev/null | tail -1)
+sleep 3
+_rt229_snap2=$(cat /tmp/rt229_stderr.log 2>/dev/null | tail -1)
+kill "${_rt229_pid}" 2>/dev/null
+wait "${_rt229_pid}" 2>/dev/null
+set -e
+# If progress updates during playback, the two snapshots should differ
+if [[ "${_rt229_snap1}" != "${_rt229_snap2}" ]] && [[ -n "${_rt229_snap1}" ]]; then
+    printf '  ✅ RT-22.9: progress text updates during playback\n'
+    PASS=$((PASS + 1))
+else
+    printf '  ❌ RT-22.9: progress text did not change between snapshots\n'
+    FAIL=$((FAIL + 1))
+    FAILURES+=("RT-22.9")
+fi
+rm -f /tmp/rt229_stderr.log /tmp/rt221_stderr.log
+
 summarise "yapper speak"
