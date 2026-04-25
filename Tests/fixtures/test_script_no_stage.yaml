@@ -1,0 +1,9 @@
+title: "The Test Play"
+author: "Test Author"
+auto-assign-voices: true
+read-stage-directions: false
+narrator-voice: bf_lily
+character-voices:
+  ALICE: bf_emma
+  BOB: bm_daniel
+  CHARLIE: auto
