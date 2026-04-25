@@ -1,0 +1,595 @@
+#+TITLE: Quadriplegia
+#+TEMPLATE: play
+#+AUTHOR: Taḋg Paul
+#+STARTUP: showeverything
+#+OPTIONS: toc:nil
+* CHARACTERS
+|--------------+---------------------------------------|
+| TOM          | Inpatient                             |
+| LOIS         | Tom's mother                          |
+| NURSE ALISON | Nurse                                 |
+| NURSE BAYANI | Nurse                                 |
+| AODH         | An old college friend of Tom's        |
+| JESS         | Tom's aunt                            |
+| BRIAN        | Tom's brother                         |
+| EDUARDO      | A member of catering staff            |
+| MAIRÉAD      | An elderly patient suffering dementia |
+|--------------+---------------------------------------|
+
+* Reduced casting
+The following characters could be played by the same actor, with reasonable costume changes, reducing the cast from 9 to 6:
+- Aodh and Brian
+- Jess and Nurse Alison
+- Lois and Mairéad
+
+* Setting
+The play unfolds in a stark, single-patient hospital room. Central to the stage is a lone bed where Tom lies, connected to an array of tubes and drips. Off to his side stands a small, wheeled shelf – the sort typically used for placing meals within easy reach of the patient. Across the room a modest desk, with a plant, accompanied by a conspicuous yellow bag. A window with its curtains drawn lets in only a hint of light.
+
+Tom lies in this bed for the entirety of the play.
+
+At stage left (or right), the door to this hospital room opens onto the wings, representing the corridor outside of Tom's room. Brief interactions between nurses and visitors may be enacted here in view of the audience.
+
+* Outline
+Tom is quadriplegic. He is unable to swallow, or at least the doctors insist it would be dangerous for him to eat or drink anything, so his nourishment is done with a tube. Yet he is determined to drink something against medical orders. The play takes place in a single hospital room where Tom lies, with various medical staff and visitors interact with Tom as they come and go.
+
+Scenes:
+1. Breakfast: Nurse Alison gives Tom his daily rinse with a toothbrush and water. Tom seizes the toothbrush with his teeth in the only act of protest he can muster.
+2. Visiting Hours: We see Tom's interaction as he receives visits from his mother, Aodh an old college friend, and Jess his aunt.
+3. The Mule: Brian his brother visits bringing contraband! A Calippo (ice lolly) from their childhood. He gets a taste before it is snatched away by Nurse Bayani.
+4. The Show: An elderly patient visits Tom's room. She thinks he is her son at first, begins quizzing him as to whether he is looking after himself. Then she thinks he is her husband, a hint that the husband has passed away. She scolds him for not taking out the bins. The two nurses come to remove her, she fights them off with her walking cane. Tom appears to have enjoyed the interaction and misses her absence.
+5. Lunch: Eduardo from the catering staff brings lunch, realizes at the last minute that Tom is nil by mouth. Tom tricks Eduardo in to believing he is only allowed drinks not food. Eduardo leaves a bottle of water. After a struggle alone with the bottle of water, Tom opens the cap with his teeth and drinks back the bottle of water in a moment of glory. Nurse Bayani arrives alarmed at this last moment - to immediate curtains.
+
+* Themes
+With gallows humour and pathos, the play explores themes such as:
+- Autonomy vs Medical Authority
+- Dignity and personhood in the face of disability
+- Isolation and dependancy
+- Memory and lost identity
+- Family dynamics under crisis
+- Mortality and acceptance
+The play ultimately questions what constitutes a meaningful life and who has the right to make decisions about another person's body and choices.
+
+
+* One Act Play
+** Scene 1: Breakfast
+*** Morning. The curtain is drawn and all artificial lights would appear to be off. Only a peak of daylight through a crack in the curtain illuminates the room, dimly. 
+*** NURSE BAYANI walks on to the stage holding what appears to be a medical chart. She quickly studies it, flips a page, and places it at the foot of the bed, revealing to the audience written on it in bold letters the word:
+- *"BREAKFAST"*
+*** She opens the curtains letting in the daylight. She also flips on the light switch, and _NURSE BAYANI exits_.
+*** [a beat]
+**** TOM
+/Once upon a Wednesday morning:/
+Me and the dog were on our way;
+I threw the ball he'd catch we'd play
+for seemed like hours and he'd adore me.
+*** [a beat]
+*** TOM closes his eyes.
+*** NURSE ALISON enters with a small glass of water and a toothbrush in hand. She places it down on the table in front of TOM and swings the shelf to be immediately in front of him in the bed. TOM's eyes open and he looks excited upon seeing the water.
+**** ALISON cheerful but firm
+Good morning, Tom. Are you ready for your little rinse?
+**** TOM voice cracked with dryness
+Oh thank god! I've waited so long! Finally ...
+**** ALISON
+You've waited since yesterday Tom. You know full well that we do this every day.
+**** TOM
+One tiny pathetic drop of water in a day, I can't bear it! Alison, when you dip the toothbrush in the water this time, please don't shake the water off before you give it to me? Please?
+**** ALISON
+You know I have to shake it. Doctor's orders. If you get water down the back of your throat -
+**** TOM cutting her off
+That's the whole point! Good god, I need enough water to swallow it!
+**** ALISON in a patronizing voice
+Tom, we've been over this, you are not able to swallow. You will choke. If it goes down into your lungs, you'll get another chest infections. Remember last time we had to drain your lungs? That was pretty serious. I don't want to see you back on that operating table again on my watch.
+**** TOM
+But today I can swallow!
+**** ALISON
+You had your swallow test last week Tom. Don't you remember, you failed it. I'm sorry.
+**** TOM
+I don't know anything about that!
+*** ALISON ignoring TOM's protestations, takes the toothbrush, dips it in the glass of water. She lifts it, and shakes off the excess water.
+*** Seeing that ALISON is ignoring his protestation, TOM pleads with her
+**** TOM
+Please Alison! Today I can swallow, I swear! Can we do the test again today?
+*** ALISON looks into TOM's eyes, then taps the toothbrush on the edge of the glass to shake off any more excess water.
+**** TOM
+Please don't shake off the water!
+*** ALISON taps it off the glass again.
+**** TOM
+Oh this is torture!
+*** ALISON puts the toothbrush back in the glass, picks it up, and makes to leave.
+**** TOM
+Alison?
+**** ALISON
+If this is torture, I had better stop it and leave you be.
+**** TOM pleading
+Come back!
+**** ALISON
+I will not be accused of torturing my patients. You owe me an apology this instant.
+**** TOM
+Alison I'm sorry, please don't leave!
+**** ALISON
+Say it like you mean it.
+**** TOM sincerely
+Oh Alison, I'm just frustrated. I didn't mean to say that, I really do appreciate everything you do for me. I am genuinely sorry.
+**** ALISON hesitantly
+OK Tom. Perhaps we can give your mouth a little rinse today.
+*** ALISON returns to TOM's bedside. She places the glass of water with the toothbrush on the shelf in front of him. She swirls the toothbrush around, lifts it out of the glass, then taps it three times on the edge of the glass to shake off the excess water. TOM opens his mouth in anticipation.
+*** ALISON places the toothbrush into TOM's mouth. TOM closes his eyes and sucks on the toothbrush, making noises of satisfaction. This continues and he sucks on the toothbrush for 1-2 beats more, making more gratified almost orgasmic sounds as he does so. 
+**** ALISON
+That's about enough for today now Tom, don't you think?
+*** TOM opens his eyes, and squashes his face in to a big frown. He grips the toothbrush with his teeth. He stares at ALISON, challenging her.
+*** ALISON tries to remove the toothbrush from TOM's mouth. But he grips it tight and refuses to let go. ALISON struggles with it. It has become a battle of wits between TOM and ALISON.
+**** ALISON, eventually
+You little git! Let go of the toothbrush!
+*** TOM, defiantly, grips harder and stares ALISON down.
+**** ALISON, shouting
+Let go Tom! Stop that now! I've had enough of this carry on! Let go you little shit!
+*** NURSE BAYANI enters
+**** BAYANI
+What's going on?
+**** ALISON
+I was just giving Tom his little rinse of water with the toothbrush. He's holding on to it with his teeth and refusing to let go!
+**** BAYANI, chuckling
+Oh is that all? Let him have it Alison. It's only a toothbrush. There's no more water in it, can't do himself any harm.
+**** ALISON, defeated
+I suppose.
+*** ALISON picks up the glass of water.
+*** Exit ALISON with NURSE BAYANI
+*** TOM loosens his grip on the toothbrush, and commences sucking on it again for a beat.
+*** Eventually, TOM spits out the toothbrush and it hits the floor. TOM stares straight ahead, towards the audience perhaps, defeated.
+
+
+** Scene 2: Visiting Hours
+*** Objective: :noexport:
+*** Same hospital room with TOM in bed, eyes closed.
+*** NURSE BAYANI walks on to the stage holding what appears to be a medical chart. She quickly studies it, flips a page, and places it at the foot of the bed, revealing to the audience written on it in bold letters the words:
+- *"VISITING HOURS"*
+*** NURSE BAYANI exits.
+**** TOM, opening his eyes:
+/Once upon a Wednesday meeting/:
+A document that I had made,
+My manager she heaped on praise,
+amendments and great parts deleting.
+*** TOM closes his eyes.
+*** LOIS enters, smiling, wearing a coat and carrying a small bag of clothes. She sits on TOM's bed.
+**** LOIS
+Hey chicky
+*** TOM opens his eyes and smiles.
+**** TOM
+Hi, mam.
+**** LOIS, taking TOM's hand in hers.
+Squeeze my hand will you?
+*** [a beat]
+**** LOIS
+That's great Tom, getting stronger every day.
+*** LOIS, releasing TOM's hand
+I brought some more clothes for you.
+*** LOIS takes out one or two items and shows him
+**** TOM
+Thanks mam, but, are they all pyjamas?
+**** LOIS
+I mean, there's only so much you can wear in a hospital bed. You're not going anywhere soon, you know that Tom. You just need to be comfortable and warm in here. I could bring you some tracksuit bottoms next time?
+**** TOM, sounding mildly disappointed
+Yeah maybe.
+*** [A beat]
+*** LOIS moving closer, speaking softly
+The surgery was touch and go. Myself and Brian sat in the Merrion across the road holding a little vigil for you til closing time.
+**** TOM smiling
+Glad I could give you a good excuse eh?
+**** LOIS
+Don't say that.
+**** TOM looking over LOIS's shoulder
+Is that ... cheesecake? Bring it over!
+**** LOIS Following his gaze
+Cake?
+*** LOIS looks around, then pauses
+**** LOIS
+Who brought cake?
+**** TOM
+Over there! on the desk! That's a lemon cheesecake right there!
+**** LOIS
+Tom, I don't see cake.
+**** TOM
+The big yellow cake on the desk - right beside the plant!
+**** LOIS apologetically
+Tommy son, that's not cake
+**** TOM
+Bring it!
+**** LOIS less patiently
+Tom, that's a bag.
+**** TOM Agitated
+I can see it! It's a cake! Why won't you just bring it to me?
+*** LOIS With a sigh retrieves the bag and holds it up
+**** LOIS
+Tom, look, this is a shopping bag. From Lidl.
+**** TOM Lips curling in disgust
+Lidl, pfft.
+*** [A beat]
+**** TOM Shifting in the bed
+I'm so thirsty. I need water. Proper River Rock, from the fridge section. Cold.
+**** LOIS gently shaking her head
+You can't, love. You know the doctor says you'll choke. You have no swallow.
+**** TOM exasperated
+I'm just so thirsty!
+**** LOIS softly, trying to soothe him
+I'll speak with the doctor. We'll see if we can't at least increase your fluids through the tube.
+**** TOM becoming more insistent
+I just want a bottle of River Rock. Come on, Mum!
+**** LOIS with a firm tone
+No, Tom. It's not safe.
+**** TOM
+Oh what's the point.
+**** LOIS quietly
+Are they letting you have the toothbrush rinse?
+**** TOM grimacing
+Oh mam. That thing, It's such a tease. I just want a bottle of water.
+**** LOIS, sighing.
+I'm sorry Tom. One of these days, hopefully.
+*** TOM closes his eyes
+*** [a beat]
+**** LOIS
+Tom, I know you're not sleeping.
+*** [A beat]
+**** LOIS (pleading)
+Tom?
+*** [a beat]
+*** TOM sits in silence.
+*** LOIS exits the room, pausing briefly outside the door in the wing
+*** NURSE ALISON enters the wing
+*** ALISON
+Did he really squeeze your hand?
+*** LOIS
+No, still nothing.
+*** NURSE ALISON and LOIS exit.
+**** TOM, alone on the stage, opening his eyes:
+/Once upon a Wednesday recess:/
+An ache inside me took its toll,
+A macchiato made me whole
+and I moved on to further conquests.
+*** TOM remains staring ahead with eyes open.
+*** Enter AODH.
+**** AODH
+Tom! How are you doing my man? Iain told me you were in here so I thought I might swing by!
+*** AODH looks around the room
+**** AODH
+Jeez, I don't know how you can just sit here and ... Would you not think about jazzing up the room? Put in a few side lights, maybe a nice picture on the wall? A little project to keep you busy! God this place is depressing.
+*** [A beat]
+**** TOM
+I guess I've had other things on my mind Aodh.
+**** AODH
+I suppose so man.
+**** TOM
+So what have you been up to then?
+**** AODH
+Trying to make some inroads with the granola gays. Y'know, the outdoorsy ones who do all the swimming and walking and all that other shite. Sunday I went down to join them at the Forty Foot, oh man some of those hotties in their swimming shorts are a dream, I tell you!
+**** TOM
+You swam?
+**** AODH
+Well not me obviously, the salt water interferes with my skincare regime. A good moisturiser needs to be kept away from sea water, you never know what's in that stuff. Say, we're going rock climbing next week, you might fancy it?
+**** TOM
+Do I look like I'll be rock climbing next week?
+**** AODH
+Well not with that attitude. It's all about the social man, I'm sure one of the nurses could wheel you over for a bit. Oh hey, could you try and get that beefcake Eduardo I saw at the Nurses station? Wouldn't mind getting to know him!
+**** TOM
+Never heard of him.
+*** AODH pouts
+*** JESS enters, opens her arms to make a hugging gesture
+**** JESS
+Thomas! How's my favourite nephew?
+**** TOM
+Jess!
+**** JESS
+And Aodh! You look like shit! Were you out partying last night?
+**** AODH
+My dear Jess, you always were such a charmer! Does the hangover really show?
+**** JESS
+A little. That and the stamp on your wrist for whatever night club you found on a Monday evening?
+**** AODH
+A few social drinks after training. I'm in a sports club now Jess. It's not all cardio workouts, you gotta do the social stuff too! Those with social connections have better life expectancy now, there was a study on it! No wonder I'm still dehydrated.
+**** TOM interjecting
+Oh Aodh, you'll feel better for hydrating! There's a vending machine with drinks in the hall, you should go get a bottle!
+**** AODH
+Right, hint taken, I'll go get one.
+**** AODH turning away, muttering
+Maybe they'll have whiskey and coke.
+**** TOM shouting after him
+And a bottle of River Rock! A cold one!
+*** AODH exits
+**** JESS
+And a mint to cover up that awful breath of his.
+[A BRIEF PAUSE]
+Sorry about that, I know he's your friend
+**** TOM
+Oh don't be silly, he gives as good as he can get. 
+**** JESS
+He's doing sport now?
+**** TOM
+If bragging is a sport.
+*** JESS chuckles
+**** JESS
+Still though. He's good to visit. Is there something more to this friendship you're not telling me?
+**** TOM scoffing
+Oh god, no. He's just an old friend from college. I'm pretty sure he's only come cos mam phoned his mother, who made him visit.
+*** [a beat]
+**** JESS pensive
+You know you don't need to keep secrets from auntie Jess right?
+**** TOM (smiling)
+Of course I know that Jess
+**** JESS
+Well as long as you know Tommy
+**** TOM chuckling
+You don't need to call me than any more either Jess. I'm thirty eight.
+**** JESS smiling
+You'll always be that little boy who used to follow me around.
+**** TOM
+I remember
+**** JESS gesturing towards his crotch
+And is this thing working yet? Are you able to, y'know
+**** TOM horrified
+Jess!
+**** JESS
+Would you like me to organize someone to, y'know, come in and ...
+**** TOM even more horrified
+Jess! honestly!!
+**** JESS
+Not me! obviously. A hooker, you know?
+**** TOM
+Oh my god Jess!!
+**** JESS (picking up her phone as if looking something up)
+I won't tell your mam, obviously
+**** TOM incredulous
+Jess!!! You know I'm gay, right?
+**** JESS
+Well a rent boy then.
+**** TOM
+Oh my god! Stop!
+**** JESS putting down her phone
+Well just so you know! Your good old aunt Jess is always here to help you get the things the others won't help you with. Remember I bought you your first pack of condoms?
+**** TOM incredulous
+Oh god, you slipped it in to my bag the first day of college. That was mortifying! The entire faculty of first year Science had a great time bonding over the spectacle of me in the front row, with the Boots 3-for-2 jumbo condoms spilling out all over the front of the lecture theatre!
+**** JESS
+Well maybe they should have been taking notes.
+*** AODH enters, with an open bottle of water in hand, and takes a gulp from it.
+**** TOM
+Aodh! You legend!
+**** AODH
+What now?
+**** TOM
+Water! Finally! My bottle of water is here!
+**** AODH
+Oh, right, yeah, no, the nurses said you can't have any. Sorry bud.
+*** AODH takes another few big glugs of water from the bottle
+**** JESS
+Don't drink that in front of him pet
+**** AODH sarcastically
+Oh, right, of course
+*** AODH places the open bottle of water on the table right in front of TOM
+**** AODH
+Well, I need a piss now
+**** JESS
+Always the gentleman
+*** AODH exits
+*** TOM leans forward to try and reach the bottle of water with his mouth
+*** JESS swipes the bottle away from TOM
+**** TOM
+What are you doing, no! Jess, bring it back!
+**** JESS exiting
+Sorry Tommy boy, I've got to pour it out I'm afraid
+**** TOM
+Please Jess! Come back! Bring it back!
+*** The sound of JESS's heels pluck the floor as she departs beyond the hospital door.
+*** AODH enters
+**** AODH
+Did you guys throw out my drink? For fuck's sake Tom! That's just not fair! You have no idea how thirsty I am!
+*** [a beat]
+**** TOM, seething
+Oh, Aodh. Remember back in college? Everyone thought you were such an arsehole.
+**** AODH, nervously chuckling
+Who did?
+**** TOM, starting to babble
+Oh, everyone did. "Aodh, why'd you hang out with him? He's such an dick!"
+**** AODH
+Tom you little joker
+*** JESS enters
+**** TOM, babbling
+And I'd say Aodh? He's alright. Bit up himself, but harmless. And you know what they used to call you? Aodh Hole! That's what they'd say. That guy is such an Aodh-Hole! Ha! I shut them down every time, I said, you just have to get to know him. But you know what Aodh? Do you know what? They were right about you! You were and still are the greatest Aodh Hole there has ever been!
+**** JESS
+Thomas!
+**** TOM
+And Jess! When you are on your death bed
+**** JESS
+What?
+**** TOM, speaking rapidly and becoming louder
+You'll be in one of these beds probably, right in this hospital. Hours left to life. You'll be gasping for air, like Jesus on the cross, you'll be thirsty asking for a little water. And you know what Jess? I will remember this day! And I will remind you of it! This day you would not help me get a little bit of water! I will remember!
+**** JESS to AODH, aside
+He's delirious, let's let him rest.
+*** JESS and AODH exit, to TOM's continuing tirade.
+
+
+** Scene 3: The Mule
+*** NURSE BAYANI carries a clipboard, checks it, then places at end of bed. It reads:
+- *"THE MULE"*
+*** NURSE BAYANI exits.
+**** TOM recites a verse, alone to himself:
+/Once upon a Wednesday lunchtime/:
+I spliced a big baguette and plopped
+on mayo meats and cheese and chopped
+a little slice for doggy munchtime.
+*** TOM stares straight ahead for a beat, before BRIAN enters.
+**** BRIAN
+Hey hey my favourite brother! You're looking a little better than the last time I saw you.
+**** TOM chuckling
+Your only brother. Ha. Glad to see you haven't given up on me.
+**** BRIAN
+Never.
+**** TOM
+Not sure I can say the same.
+**** BRIAN
+You've just gotta hang in there man.
+*** [a beat]
+**** TOM
+So how are the kids? Mum showed me the videos, they're getting so big!
+**** BRIAN
+Yeah they're great, a handful at the moment, I'm doing the school runs these days.
+**** TOM
+Please tell me you're not using that contraption to bring them, on the dark mornings?
+**** BRIAN
+It's a decent bike, and that trailer is meant for two children. It's alright.
+**** TOM
+Take my car
+**** BRIAN
+What? I can't take your car.
+**** TOM
+I'm hardly using it!
+**** BRIAN hesitantly
+Are you sure?
+**** TOM
+Of course! But I'll need it back before Christmas. Hey, did you bring the Calippo?
+**** BRIAN
+I sure did. Didn't even know they were still making them!
+**** TOM
+Oh you are amazing, you've made me very happy today.
+*** BRIAN opens a Calippo ice lolly, then puts it to TOM's lips
+**** BRIAN
+There you go, bro.
+*** TOM bites off a piece and makes an appreciative, almost orgasmic sound
+**** TOM
+That's so good!
+*** NURSE ALISON rushes in
+**** ALISON
+Stop! He'll choke!
+**** BRIAN
+What?
+**** ALISON
+He can't have anything like that, he has no swallow!
+**** BRIAN
+I didn't know!
+**** ALISON
+Can you come out here for a word
+*** BRIAN follows ALISON out of the room
+*** Outside of TOM's hospital room
+**** BRIAN
+I'm sorry, he told me the doctor had okayed it!
+**** ALISON, earnestly
+He has no swallow! It will go straight down his lungs. If he doesn't suffocate, he'll get another chest infection, we just can't let that happen.
+*** [a beat]
+**** ALISON
+I'm sorry, I know it's hard. We've been trying to make him understand. I mean, I overheard you both there, I don't mean to intrude. But he is not accepting things, He's not being realistic.
+**** BRIAN
+That he thinks he'll be home for Christmas?
+**** ALISON
+Or that he will ever be driving a car again.
+
+
+** Scene 4: The Show
+*** TOM alone in his room
+**** TOM recites to himself:
+/Once upon a Wednesday errand:/
+A woman skipped ahead of me,
+In haste a crate she banged her knee
+jettisoning many lemons.
+*** Enter MAIRÉAD, unsteadily leaning on her walking cane.
+**** MAIRÉAD
+Michael? Michael, there you are. (peering at Tom) I've been looking all over for you, son. Now make sure you put on a warm jacket if you go outside you'll catch your death out there.
+**** TOM (amused but warmly)
+I... ah... Sorry, Mam. I've been staying warm, don't worry. 
+**** MAIRÉAD (tuts softly, muttering)
+They've gone and given me these Valium again. The great memory eraser, I call it. My mind's all over the place. (looks around warily) Do you know how we get out of here? 
+**** TOM
+Not just yet. It might be tricky, but we'll figure it out.
+**** MAIRÉAD suddenly changing tone, now focusing on tidying TOM's things
+Peadar! Why did you leave these clothes out just lying about everywhere?
+*** MAIRÉAD begins tidying things around the room. She picks up Tom's medical chart and places it at the foot of the bed, so we see in large lettering:
+*"THE SHOW'*
+*** MAIRÉAD picks up papers from the desk and some old paper coffee cups, putting them in the bin
+**** MAIRÉAD
+And you still haven't taken out these bins! Sure I've been asking you three times already today! You can't expect me to do everything!
+**** TOM (smiling to himself, deciding to play along more)
+I'm sorry, love. I'll do better next time. 
+**** MAIRÉAD (hesitates, a flicker of memory crossing her face)
+Peadar... you've been gone... (shakes it off, then brightens) Are you still writing your poetry? I could have sworn I heard you reading out your poetry just now! Oh your brother read out one of your finest for the eulogy, we were all in tears! Laughing and in tears! At a funeral no less.
+**** TOM
+I've been working on a little something, but it's not ready yet.
+**** MAIRÉAD
+Oh, that's lovely, Tom. (realises his name briefly) I've taken a fancy to Emily Dickinson of late. That woman was obsessed with death! I get such a kick reciting it to the nurses. They get so uncomfortable when I corner them with /I Felt a Funeral In my Brain/!
+
+But tonight I think I will treat them to /Because I Could Not Stop for Death/!
+
+**** MAIRÉAD recites:
+Because I would not stop for Death
+He made a bed for me,
+Inside my cell there was a bell
+If nurses were of need.
+
+We held a wake my friends brought cake,
+And so the stories flowed!
+We laughed and cried as if I'd died,
+A sweetness in such woe.
+
+The videos of little shows
+My grandson made for me.
+My college mates, my old ex-dates,
+and long-time frenemies!
+
+(growing louder)
+Mairéad of old her story told
+yet still each day they came.
+A wake so long a worthy song,
+My life so well exclaimed.
+
+*** Enter NURSE BAYANI, NURSE ALISON and EDUARDO rushing in during the last stanza
+(almost shouting)
+Since then, 'tis centuries—
+Seems shorter than a day,
+(shouting)
+The party now it's over,
+The phone rings not for me!
+**** BAYANI
+Mairéad, you shouldn't be in here. Come on now, back to your room. 
+*** MAIRÉAD swings her cane around to fend them off defensively
+**** MAIRÉAD
+This is my house! Get out! Get out! Get out! (tries to fight them off) Why won't you just leave us be?
+**** ALISON (hand on Mairéad's arm, gently restraining her)
+I'm sorry, Tom. She must have wandered off again. 
+**** EDUARDO (helps guide Mairéad towards the door)
+It's alright, Mairéad, come along now.
+**** TOM (calling after them)
+It's no bother. She's good company.
+**** TOM (louder)
+You drop in any time Mairéad! I do enjoy our little chats!
+*** The staff finally manage to escort Mairéad out. TOM is left alone in the dimly lit room.
+*** End of Scene
+
+
+** Scene 5: Lunch
+*** TOM is alone in his room
+**** TOM recites to himself
+/Once upon a Wednesday evening:/
+I went upstairs to get a thing.
+Whatever thing — I did not bring —
+And there were no more Wednesday evenings.
+*** EDUARDO a member of the catering staff, enters pushing a trolley with trays of food for the patients' lunch.
+*** EDUARDO checks his list
+**** EDUARDO
+Hey buddy. Lunch time, are you hungry?
+*** EDUARDO checks TOM's chart, then replaces it at the end of his bed. On the chart we can see in large lettering:
+- *"LUNCH"*
+**** EDUARDO
+Oh, I'm so sorry. I see you are nil by mouth.
+**** TOM
+Yeah, no solids I'm afraid. They're only letting me have liquids.
+**** EDUARDO
+Oh yeah, sorry dude, I've only got bottles of still water.
+**** TOM
+That's ok, I'll take one of those
+**** EDUARDO
+Are you sure? I can check, we might have something else
+**** TOM hastily
+No! Honestly, water is fine.
+**** EDUARDO placing the water on the shelf in front of TOM
+OK mate. I'll try and have more options for you next time
+*** EDUARDO exits
+*** TOM struggles with movement in his arms. There is a hint of movement but nothing more. Then his arms move, but there is no dexterity. He knocks the water on its side, then clumsily manages to get it upright, again with no dexterity. He seizes the top with his teeth. After a few moments of struggle, he takes the cap of the bottle of water clean off with his teeth. He spits out the cap, then with his teeth again seizes the bottle, and drinks the entire bottle of water. He spits out the bottle, which hits the floor. Perhaps some music to accompany this moment of pure glory.
+*** NURSE BAYANI enters, picks up the bottle from the floor
+**** BAYANI
+Tom! No!
+*** Curtains
