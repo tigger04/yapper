@@ -1,0 +1,16 @@
+#+TITLE: Direction Test
+#+AUTHOR: Test
+
+* ACT I
+** Scene 1: Test
+*** A room.
+**** ALICE
+Hello.
+**** BOB softly
+Hi there.
+**** ALICE, firmly
+No.
+**** BOB (whispering)
+Please.
+**** ALICE offstage, calling back
+Goodbye.

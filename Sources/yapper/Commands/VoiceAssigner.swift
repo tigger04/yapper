@@ -23,16 +23,25 @@ struct VoiceAssigner {
         var assigned: [String: Voice] = [:]
         var usedVoiceNames: Set<String> = []
 
-        // Reserve narrator voice
-        let narratorName = narratorVoiceName ?? config?.narratorVoice
+        // Reserve narrator voice — supports explicit name or filter shorthand
+        let narratorSpec = narratorVoiceName ?? config?.narratorVoice
         let narrator: Voice
-        if let name = narratorName, let v = registry.voices.first(where: { $0.name == name }) {
-            narrator = v
-            usedVoiceNames.insert(v.name)
+        if let spec = narratorSpec {
+            if spec.contains("_"), let v = registry.voices.first(where: { $0.name == spec }) {
+                // Explicit voice name
+                narrator = v
+            } else if let filter = parseFilter(spec),
+                      let v = registry.list(filter: filter).first {
+                // Filter shorthand (e.g. "bf")
+                narrator = v
+            } else {
+                // Fallback if spec matches nothing
+                narrator = registry.voices.last ?? registry.voices[0]
+            }
         } else {
             narrator = registry.voices.last ?? registry.voices[0]
-            usedVoiceNames.insert(narrator.name)
         }
+        usedVoiceNames.insert(narrator.name)
 
         // Phase 1: explicit voice names
         for char in characters {

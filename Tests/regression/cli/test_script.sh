@@ -359,4 +359,259 @@ test_RT23_26() {
 }
 run_test "RT-23.26" "prose file not treated as script" test_RT23_26
 
+# ---------------------------------------------------------------------------
+# AC23.11: Direction stripping (caps = name, non-caps = direction)
+# ---------------------------------------------------------------------------
+
+DIRECTIONS_ORG="${FIXTURES}/test_script_directions.org"
+DIRECTIONS_MD="${FIXTURES}/test_script_directions.md"
+
+# RT-23.27: Bare-word directions stripped in org format.
+test_RT23_27() {
+    local output
+    output=$("${YAPPER}" convert "${DIRECTIONS_ORG}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -qi "ALICE.*firmly\|BOB.*softly\|ALICE.*offstage"; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "ALICE" || return 1
+    printf '%s' "${output}" | grep -qi "BOB" || return 1
+}
+run_test "RT-23.27" "bare-word directions stripped (org)" test_RT23_27
+
+# RT-23.28: Comma-separated directions stripped.
+test_RT23_28() {
+    local output
+    output=$("${YAPPER}" convert "${DIRECTIONS_ORG}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -qi "calling back"; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "Hello\|Goodbye" || return 1
+}
+run_test "RT-23.28" "comma-separated directions stripped" test_RT23_28
+
+# RT-23.29: Only 2 distinct characters found, not 5+.
+test_RT23_29() {
+    local output
+    output=$("${YAPPER}" convert "${DIRECTIONS_ORG}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    local char_count
+    char_count=$(printf '%s' "${output}" | grep -E "^  [A-Z]" | grep -v "Narrator" | wc -l | tr -d ' ')
+    [[ ${char_count} -le 3 ]]
+}
+run_test "RT-23.29" "direction variants don't create extra characters" test_RT23_29
+
+# ---------------------------------------------------------------------------
+# AC23.12: Script mode activation visible on stderr
+# ---------------------------------------------------------------------------
+
+# RT-23.30: --script-config shows "Script mode" on stderr.
+test_RT23_30() {
+    local output
+    output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "Script mode"
+}
+run_test "RT-23.30" "--script-config activation shows Script mode" test_RT23_30
+
+# RT-23.31: Auto-discovered script.yaml shows "Script mode" on stderr.
+test_RT23_31() {
+    local dir="${SUITE_TMP}/rt2331"
+    mkdir -p "${dir}"
+    cp "${MD_SCRIPT}" "${dir}/play.md"
+    cp "${CONFIG}" "${dir}/script.yaml"
+    local output
+    output=$("${YAPPER}" convert "${dir}/play.md" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "Script mode"
+}
+run_test "RT-23.31" "auto-discovered config shows Script mode" test_RT23_31
+
+# ---------------------------------------------------------------------------
+# AC23.13: Parse errors are fatal with descriptive message
+# ---------------------------------------------------------------------------
+
+BAD_CONFIG="${FIXTURES}/test_script_bad.yaml"
+
+# RT-23.32: Malformed YAML config exits non-zero with descriptive error.
+test_RT23_32() {
+    local output
+    if output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${BAD_CONFIG}" --dry-run --non-interactive 2>&1); then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "config\|yaml\|parse\|invalid"
+}
+run_test "RT-23.32" "malformed config exits non-zero with error" test_RT23_32
+
+# RT-23.33: Valid config but empty input file exits non-zero.
+test_RT23_33() {
+    printf '' > "${SUITE_TMP}/empty.md"
+    local output
+    if output=$("${YAPPER}" convert "${SUITE_TMP}/empty.md" --script-config "${CONFIG}" --non-interactive 2>&1); then
+        return 1
+    fi
+    return 0
+}
+run_test "RT-23.33" "empty input file exits non-zero" test_RT23_33
+
+# ---------------------------------------------------------------------------
+# AC23.14: Undeclared characters auto-assigned with consistent voice
+# ---------------------------------------------------------------------------
+
+UNDECLARED_CONFIG="${FIXTURES}/test_script_undeclared.yaml"
+
+# RT-23.34: Config lists 2 characters, script has 3 — third gets a voice.
+test_RT23_34() {
+    local output
+    output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${UNDECLARED_CONFIG}" --dry-run --non-interactive 2>&1)
+    # CHARLIE is not in the config but should appear with a voice
+    printf '%s' "${output}" | grep -qi "CHARLIE" || return 1
+    local charlie_voice
+    charlie_voice=$(printf '%s' "${output}" | grep -i "CHARLIE" | grep -oiE '(af|am|bf|bm)_[a-z]+' | head -1)
+    [[ -n "${charlie_voice}" ]] || return 1
+    # Should not be bf_emma (ALICE) or bm_daniel (BOB)
+    [[ "${charlie_voice}" != "bf_emma" ]] || return 1
+    [[ "${charlie_voice}" != "bm_daniel" ]]
+}
+run_test "RT-23.34" "undeclared character auto-assigned unique voice" test_RT23_34
+
+# RT-23.39: Auto-assigned character's voice is consistent.
+test_RT23_39() {
+    local output
+    output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${UNDECLARED_CONFIG}" --dry-run --non-interactive 2>&1)
+    # CHARLIE should appear in cast list with a voice
+    printf '%s' "${output}" | grep -qi "CHARLIE" || return 1
+    # The cast list shows the assignment once — consistency is guaranteed by
+    # the VoiceAssigner which assigns once before synthesis. The cast list
+    # IS the assignment. If CHARLIE appears with one voice, that voice is
+    # used for all CHARLIE turns.
+    local voice_count
+    voice_count=$(printf '%s' "${output}" | grep -i "CHARLIE" | grep -oiE '(af|am|bf|bm)_[a-z]+' | sort -u | wc -l | tr -d ' ')
+    [[ ${voice_count} -eq 1 ]]
+}
+run_test "RT-23.39" "auto-assigned character voice is consistent" test_RT23_39
+
+# ---------------------------------------------------------------------------
+# AC23.15: Multi-word ALL-CAPS character names
+# ---------------------------------------------------------------------------
+
+MULTIWORD_ORG="${FIXTURES}/test_script_multiword.org"
+
+# RT-23.35: GDA CONLON is one character, not two.
+test_RT23_35() {
+    local output
+    output=$("${YAPPER}" convert "${MULTIWORD_ORG}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "GDA CONLON" || return 1
+    # Should NOT have separate "GDA" and "CONLON" characters
+    if printf '%s' "${output}" | grep -qE "^  GDA:" ; then
+        return 1
+    fi
+}
+run_test "RT-23.35" "multi-word caps name is one character" test_RT23_35
+
+# ---------------------------------------------------------------------------
+# AC23.16: Narrator voice filter shorthands
+# ---------------------------------------------------------------------------
+
+# RT-23.36: narrator-voice: bf assigns a British female.
+test_RT23_36() {
+    printf 'auto-assign-voices: true\nnarrator-voice: bf\n' > "${SUITE_TMP}/narrator_filter.yaml"
+    local output
+    output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${SUITE_TMP}/narrator_filter.yaml" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -i "narrator" | grep -qiE 'bf_'
+}
+run_test "RT-23.36" "narrator-voice filter assigns British female" test_RT23_36
+
+# RT-23.37: narrator-voice: bf_lily assigns exactly bf_lily.
+test_RT23_37() {
+    printf 'auto-assign-voices: true\nnarrator-voice: bf_lily\n' > "${SUITE_TMP}/narrator_explicit.yaml"
+    local output
+    output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${SUITE_TMP}/narrator_explicit.yaml" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -i "narrator" | grep -qi "bf_lily"
+}
+run_test "RT-23.37" "narrator-voice explicit assigns bf_lily" test_RT23_37
+
+# ---------------------------------------------------------------------------
+# AC23.17: Dry-run creates no output files
+# ---------------------------------------------------------------------------
+
+# RT-23.38: --dry-run with -o flag does not create the M4B.
+test_RT23_38() {
+    "${YAPPER}" convert "${MD_SCRIPT}" --script-config "${CONFIG}" --dry-run --non-interactive -o "${SUITE_TMP}/should_not_exist.m4b" >/dev/null 2>&1
+    [[ ! -f "${SUITE_TMP}/should_not_exist.m4b" ]]
+}
+run_test "RT-23.38" "dry-run creates no output files" test_RT23_38
+
+# ---------------------------------------------------------------------------
+# Audit-recommended tests
+# ---------------------------------------------------------------------------
+
+# RT-23.40: Directions don't leak into synthesis — output duration consistent
+# with dialogue only, not inflated by direction text being spoken.
+test_RT23_40() {
+    local dir="${SUITE_TMP}/rt2340"
+    mkdir -p "${dir}"
+    "${YAPPER}" convert "${DIRECTIONS_ORG}" --script-config "${CONFIG}" --non-interactive -o "${dir}/play.m4b" --quiet >/dev/null 2>&1
+    [[ -f "${dir}/play.m4b" ]] || return 1
+    local duration
+    duration=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "${dir}/play.m4b" 2>/dev/null)
+    # 5 short dialogue lines ≈ 5-15s of audio. If directions leaked in,
+    # duration would be much higher. Check < 30s.
+    [[ -n "${duration}" ]] && awk "BEGIN{exit(${duration} < 30 ? 0 : 1)}"
+}
+run_test "RT-23.40" "directions don't inflate synthesis duration" test_RT23_40
+
+# RT-23.41: Fully integrated — auto-discover config + org file → M4B.
+test_RT23_41() {
+    local dir="${SUITE_TMP}/rt2341"
+    mkdir -p "${dir}"
+    cp "${ORG_SCRIPT}" "${dir}/play.org"
+    cp "${CONFIG}" "${dir}/script.yaml"
+    "${YAPPER}" convert "${dir}/play.org" --non-interactive -o "${dir}/play.m4b" --quiet >/dev/null 2>&1
+    [[ -f "${dir}/play.m4b" ]] || return 1
+    # Verify metadata
+    local artist
+    artist=$(ffprobe -v quiet -show_entries format_tags=artist -of csv=p=0 "${dir}/play.m4b" 2>/dev/null)
+    [[ "${artist}" == *"Test Author"* ]] || return 1
+    # Verify chapters
+    local chapters
+    chapters=$(ffprobe -v quiet -show_chapters "${dir}/play.m4b" 2>/dev/null | grep -c "^\[CHAPTER\]")
+    [[ ${chapters} -ge 1 ]]
+}
+run_test "RT-23.41" "fully integrated: auto-discover + org → M4B" test_RT23_41
+
+# RT-23.42: Markdown bare-word directions stripped.
+test_RT23_42() {
+    local output
+    output=$("${YAPPER}" convert "${DIRECTIONS_MD}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    # BOB SOFTLY should resolve to character BOB
+    if printf '%s' "${output}" | grep -qi "BOB.*softly\|ALICE.*firmly"; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "BOB" || return 1
+    printf '%s' "${output}" | grep -qi "ALICE" || return 1
+}
+run_test "RT-23.42" "markdown bare-word directions stripped" test_RT23_42
+
+# RT-23.43: Multi-word name + direction: GDA CONLON softly → GDA CONLON.
+test_RT23_43() {
+    local output
+    output=$("${YAPPER}" convert "${MULTIWORD_ORG}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "GDA CONLON" || return 1
+    # "softly" should not appear in cast or dialogue attribution
+    if printf '%s' "${output}" | grep -i "GDA CONLON" | grep -qi "softly"; then
+        return 1
+    fi
+}
+run_test "RT-23.43" "multi-word name + direction: GDA CONLON softly" test_RT23_43
+
+# RT-23.44: Single-scene script → M4B with 1 chapter.
+test_RT23_44() {
+    local dir="${SUITE_TMP}/rt2344"
+    mkdir -p "${dir}"
+    cp "${CONFIG}" "${dir}/script.yaml"
+    "${YAPPER}" convert "${FIXTURES}/test_script_single_scene.md" --script-config "${dir}/script.yaml" --non-interactive -o "${dir}/play.m4b" --quiet >/dev/null 2>&1
+    [[ -f "${dir}/play.m4b" ]] || return 1
+    local chapters
+    chapters=$(ffprobe -v quiet -show_chapters "${dir}/play.m4b" 2>/dev/null | grep -c "^\[CHAPTER\]")
+    [[ ${chapters} -eq 1 ]]
+}
+run_test "RT-23.44" "single-scene script produces 1 chapter M4B" test_RT23_44
+
 summarise "script reading"

@@ -57,17 +57,33 @@ struct ConvertCommand: ParsableCommand {
         }
 
         // Script mode: detect config file and attempt script parsing
-        if let scriptDoc = try detectAndParseScript() {
-            if dryRun {
-                try printScriptDryRun(scriptDoc)
+        let hasScriptConfig = scriptConfig != nil || {
+            guard inputs.count == 1 else { return false }
+            let dir = URL(fileURLWithPath: inputs[0]).deletingLastPathComponent().path
+            return FileManager.default.fileExists(atPath: "\(dir)/script.yaml")
+        }()
+
+        if hasScriptConfig {
+            if let scriptDoc = try detectAndParseScript() {
+                if !quiet {
+                    let configSource = scriptConfig ?? "script.yaml (auto-discovered)"
+                    fputs("Script mode: using \(configSource)\n", stderr)
+                }
+                if dryRun {
+                    try printScriptDryRun(scriptDoc)
+                } else {
+                    let engine = try YapperEngine(
+                        modelPath: defaultModelPath(),
+                        voicesPath: defaultVoicesPath()
+                    )
+                    try runScriptMode(engine: engine, script: scriptDoc)
+                }
+                return
             } else {
-                let engine = try YapperEngine(
-                    modelPath: defaultModelPath(),
-                    voicesPath: defaultVoicesPath()
-                )
-                try runScriptMode(engine: engine, script: scriptDoc)
+                // Config present but no parseable script content — fatal error
+                throw ValidationError(
+                    "Script config found but input file contains no parseable script content: \(inputs[0])")
             }
-            return
         }
 
         let engine = try YapperEngine(

@@ -33,6 +33,12 @@ struct ScriptParser {
 
     /// Attempt to parse a file as a script. Returns nil if no script patterns found.
     static func parse(filePath: String, config: ScriptConfig?) throws -> ScriptDocument? {
+        let knownChars: Set<String>
+        if let keys = config?.characterVoices?.keys {
+            knownChars = Set(keys.map { $0.uppercased() })
+        } else {
+            knownChars = []
+        }
         let ext = URL(fileURLWithPath: filePath).pathExtension.lowercased()
         let data = try Data(contentsOf: URL(fileURLWithPath: filePath))
         guard let content = String(data: data, encoding: .utf8) else {
@@ -41,9 +47,9 @@ struct ScriptParser {
 
         switch ext {
         case "org":
-            return parseOrg(content: content, config: config)
+            return parseOrg(content: content, config: config, knownCharacters: knownChars)
         case "md", "markdown":
-            return parseMd(content: content, config: config)
+            return parseMd(content: content, config: config, knownCharacters: knownChars)
         default:
             return nil
         }
@@ -55,12 +61,14 @@ struct ScriptParser {
     /// `**CHARACTER:**` at line start = dialogue.
     /// `*italic text*` at line start = stage direction.
     /// `### Scene Title` = scene boundary.
-    private static func parseMd(content: String, config: ScriptConfig?) -> ScriptDocument? {
+    private static func parseMd(content: String, config: ScriptConfig?, knownCharacters: Set<String>) -> ScriptDocument? {
         let lines = content.components(separatedBy: "\n")
 
-        // Check for script patterns in first 100 lines
+        // Check for script patterns in first 100 lines.
+        // Match **ANYTHING:** where the content starts with an ALL-CAPS word.
+        // Handles: **BOB:**, **BOB softly:**, **BOB (softly):**, **BOB, firmly:**
         let sample = lines.prefix(100).joined(separator: "\n")
-        let dialoguePattern = try? NSRegularExpression(pattern: #"^\*\*[A-Z\u00C0-\u024F ']+:?\*\*"#, options: .anchorsMatchLines)
+        let dialoguePattern = try? NSRegularExpression(pattern: #"^\*\*[A-Z\u00C0-\u024F][^*]*:?\*\*"#, options: .anchorsMatchLines)
         let sampleRange = NSRange(sample.startIndex..., in: sample)
         let matchCount = dialoguePattern?.numberOfMatches(in: sample, range: sampleRange) ?? 0
         if matchCount < 2 {
@@ -121,14 +129,10 @@ struct ScriptParser {
             if trimmed.hasPrefix("**") {
                 if let endBold = trimmed.range(of: "**", range: trimmed.index(trimmed.startIndex, offsetBy: 2)..<trimmed.endIndex) {
                     flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
-                    var charName = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 2)..<endBold.lowerBound])
+                    var charRaw = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 2)..<endBold.lowerBound])
                     // Remove trailing colon
-                    if charName.hasSuffix(":") { charName = String(charName.dropLast()) }
-                    // Strip acting notes in parentheses
-                    if let parenStart = charName.firstIndex(of: "(") {
-                        charName = String(charName[..<parenStart])
-                    }
-                    charName = charName.trimmingCharacters(in: .whitespaces).uppercased()
+                    if charRaw.hasSuffix(":") { charRaw = String(charRaw.dropLast()) }
+                    let charName = extractCharacterName(charRaw, knownCharacters: knownCharacters)
                     if !charName.isEmpty {
                         currentCharacter = charName
                     }
@@ -169,7 +173,7 @@ struct ScriptParser {
     /// `***` (L3 heading) = stage direction.
     /// `****` (L4 heading) = dialogue attribution.
     /// Body text below L4 = dialogue.
-    private static func parseOrg(content: String, config: ScriptConfig?) -> ScriptDocument? {
+    private static func parseOrg(content: String, config: ScriptConfig?, knownCharacters: Set<String>) -> ScriptDocument? {
         let lines = content.components(separatedBy: "\n")
 
         var title: String?
@@ -209,12 +213,8 @@ struct ScriptParser {
             // Dialogue attribution: **** CHARACTER or **** CHARACTER (notes)
             if trimmed.hasPrefix("**** ") {
                 flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
-                var charName = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-                // Strip acting notes in parentheses
-                if let parenStart = charName.firstIndex(of: "(") {
-                    charName = String(charName[..<parenStart])
-                }
-                charName = charName.trimmingCharacters(in: .whitespaces).uppercased()
+                let charRaw = String(trimmed.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+                let charName = extractCharacterName(charRaw, knownCharacters: knownCharacters)
                 if !charName.isEmpty {
                     currentCharacter = charName
                 }
@@ -265,6 +265,62 @@ struct ScriptParser {
             characters: Array(characters).sorted(),
             scenes: scenes
         )
+    }
+
+    // MARK: - Character name extraction
+
+    /// Extract the character name from an attribution line, stripping acting
+    /// directions. ALL-CAPS words are character name, first non-caps word
+    /// starts the direction which is discarded.
+    ///
+    /// Examples:
+    ///   `KEVIN` → KEVIN
+    ///   `KEVIN softly` → KEVIN
+    ///   `KEVIN, softly` → KEVIN
+    ///   `KEVIN (softly)` → KEVIN
+    ///   `KEVIN, (softly)` → KEVIN
+    ///   `KEVIN Softly` → KEVIN
+    ///   `GDA CONLON` → GDA CONLON (multi-word, all caps)
+    ///   `CÁIT gives him a look.` → CÁIT
+    ///   `KEVIN offstage, sounding closer` → KEVIN
+    private static func extractCharacterName(
+        _ raw: String,
+        knownCharacters: Set<String>
+    ) -> String {
+        var text = raw.trimmingCharacters(in: .whitespaces)
+
+        // Strip parenthesised content
+        if let parenStart = text.firstIndex(of: "(") {
+            text = String(text[..<parenStart]).trimmingCharacters(in: .whitespaces)
+        }
+
+        // Strip trailing comma and everything after
+        if let commaIdx = text.firstIndex(of: ",") {
+            text = String(text[..<commaIdx]).trimmingCharacters(in: .whitespaces)
+        }
+
+        // Take only leading ALL-CAPS words. A word is ALL-CAPS if every letter
+        // in it is uppercase (handles accented characters like CÁIT).
+        // Stop at the first word that contains any lowercase letter.
+        let words = text.components(separatedBy: .whitespaces)
+        var nameWords: [String] = []
+        for word in words {
+            guard !word.isEmpty else { continue }
+            let letters = word.filter { $0.isLetter }
+            if letters.isEmpty {
+                // Punctuation-only token — skip
+                continue
+            }
+            let allUpper = letters.allSatisfy { $0.isUppercase }
+            if allUpper {
+                nameWords.append(word)
+            } else {
+                break
+            }
+        }
+
+        let name = nameWords.joined(separator: " ")
+        return name.isEmpty ? text : name
     }
 
     // MARK: - Helpers

@@ -1,0 +1,5 @@
+auto-assign-voices: true
+read-stage-directions: false
+character-voices:
+  ALICE: bf_emma
+  BOB: bm_daniel
