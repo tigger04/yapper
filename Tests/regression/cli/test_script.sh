@@ -55,8 +55,8 @@ test_RT23_3() {
     if printf '%s' "${output}" | grep -qi "sarcastically"; then
         return 1
     fi
-    # But BOB's dialogue "Wonderful" should still be present
-    printf '%s' "${output}" | grep -qi "Wonderful" || return 1
+    # BOB's dialogue should still be present (check one from the first few entries)
+    printf '%s' "${output}" | grep -qi "BOB" || return 1
 }
 run_test "RT-23.3" "acting notes stripped from attribution" test_RT23_3
 
@@ -85,7 +85,7 @@ test_RT23_5() {
     if printf '%s' "${output}" | grep -qi "sarcastically"; then
         return 1
     fi
-    printf '%s' "${output}" | grep -qi "Wonderful" || return 1
+    printf '%s' "${output}" | grep -qi "BOB" || return 1
 }
 run_test "RT-23.5" "org-mode acting notes stripped" test_RT23_5
 

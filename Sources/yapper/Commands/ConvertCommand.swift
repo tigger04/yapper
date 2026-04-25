@@ -48,9 +48,26 @@ struct ConvertCommand: ParsableCommand {
     @Flag(name: .shortAndLong, help: "Suppress progress output.")
     var quiet: Bool = false
 
+    @Option(name: .long, help: "Path to script.yaml config file for script-reading mode.")
+    var scriptConfig: String?
+
     func run() throws {
         guard !inputs.isEmpty else {
             throw ValidationError("No input files specified.")
+        }
+
+        // Script mode: detect config file and attempt script parsing
+        if let scriptDoc = try detectAndParseScript() {
+            if dryRun {
+                try printScriptDryRun(scriptDoc)
+            } else {
+                let engine = try YapperEngine(
+                    modelPath: defaultModelPath(),
+                    voicesPath: defaultVoicesPath()
+                )
+                try runScriptMode(engine: engine, script: scriptDoc)
+            }
+            return
         }
 
         let engine = try YapperEngine(
@@ -767,6 +784,211 @@ struct ConvertCommand: ParsableCommand {
         process.standardError = FileHandle.nullDevice
         try process.run()
         process.waitUntilExit()
+    }
+
+    // MARK: - Script mode
+
+    /// Detect and parse a script file. Returns nil for prose files.
+    private func detectAndParseScript() throws -> ScriptDocument? {
+        guard inputs.count == 1 else { return nil }
+        let inputPath = inputs[0]
+
+        // Load config from --script-config flag or auto-discover script.yaml
+        var config: ScriptConfig?
+        if let configPath = scriptConfig {
+            config = try ScriptConfig.load(from: configPath)
+        } else {
+            let dir = URL(fileURLWithPath: inputPath).deletingLastPathComponent().path
+            let autoPath = "\(dir)/script.yaml"
+            if FileManager.default.fileExists(atPath: autoPath) {
+                config = try ScriptConfig.load(from: autoPath)
+            }
+        }
+
+        // If no config and no --script-config flag, only parse if file has script patterns
+        return try ScriptParser.parse(filePath: inputPath, config: config)
+    }
+
+    /// Print dry-run output for script mode.
+    private func printScriptDryRun(_ script: ScriptDocument) throws {
+        let registry = try VoiceRegistry(voicesPath: defaultVoicesPath())
+        let config = try loadScriptConfig()
+        let (charVoices, narrator) = VoiceAssigner.assign(
+            characters: script.characters,
+            config: config,
+            registry: registry,
+            narratorVoiceName: config?.narratorVoice
+        )
+
+        let readStage = config?.readStageDirections ?? true
+
+        print("Script mode: \(script.title ?? "Untitled")")
+        if let author = script.author { print("  Author: \(author)") }
+        print("")
+        print("Cast:")
+        for char in script.characters {
+            let voiceName = charVoices[char]?.name ?? "unassigned"
+            print("  \(char): \(voiceName)")
+        }
+        print("  Narrator (stage directions): \(narrator.name)")
+        print("")
+        print("Scenes: \(script.scenes.count)")
+        for (i, scene) in script.scenes.enumerated() {
+            print("  [\(i + 1)/\(script.scenes.count)] \(scene.title)")
+            // Show first few entries as preview
+            for entry in scene.entries.prefix(5) {
+                switch entry.type {
+                case .dialogue(let char):
+                    let voiceName = charVoices[char]?.name ?? "?"
+                    let preview = entry.text.prefix(60)
+                    print("    \(char) (\(voiceName)): \(preview)\(entry.text.count > 60 ? "..." : "")")
+                case .stageDirection:
+                    if readStage {
+                        let preview = entry.text.prefix(60)
+                        print("    [stage] (\(narrator.name)): \(preview)\(entry.text.count > 60 ? "..." : "")")
+                    }
+                }
+            }
+            if scene.entries.count > 5 {
+                print("    ... and \(scene.entries.count - 5) more entries")
+            }
+        }
+        print("")
+        print("(dry run — no synthesis performed)")
+    }
+
+    /// Run script mode: synthesise each dialogue turn with the assigned voice.
+    private func runScriptMode(engine: YapperEngine, script: ScriptDocument) throws {
+        let config = try loadScriptConfig()
+        let (charVoices, narrator) = VoiceAssigner.assign(
+            characters: script.characters,
+            config: config,
+            registry: engine.voiceRegistry,
+            narratorVoiceName: config?.narratorVoice
+        )
+
+        let readStage = config?.readStageDirections ?? true
+        let resolvedTitle = config?.title ?? script.title ?? title
+        let resolvedAuthor = config?.author ?? script.author ?? author
+
+        // Resolve metadata interactively if needed
+        let finalTitle: String?
+        let finalAuthor: String?
+        if !nonInteractive {
+            let chapters = script.scenes.map { Chapter(title: $0.title, text: "") }
+            let (a, t) = resolveMetadata(chapters: chapters)
+            finalAuthor = a ?? resolvedAuthor
+            finalTitle = t ?? resolvedTitle
+        } else {
+            finalAuthor = resolvedAuthor
+            finalTitle = resolvedTitle
+        }
+
+        let outputPath = output ?? {
+            let url = URL(fileURLWithPath: inputs[0])
+            let base = url.deletingPathExtension().lastPathComponent
+            let dir = url.deletingLastPathComponent().path
+            return "\(dir)/\(base).m4b"
+        }()
+
+        if FileManager.default.fileExists(atPath: outputPath) {
+            let backupPath = nextBackupPath(for: outputPath)
+            try FileManager.default.moveItem(atPath: outputPath, toPath: backupPath)
+            if !quiet { fputs("Backed up existing \(outputPath) to \(backupPath)\n", stderr) }
+        }
+
+        if !quiet {
+            fputs("Script mode: \(script.title ?? "Untitled")\n", stderr)
+            fputs("Cast: \(script.characters.map { "\($0)=\(charVoices[$0]?.name ?? "?")" }.joined(separator: ", "))\n", stderr)
+            fputs("Narrator: \(narrator.name)\n", stderr)
+        }
+
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("yapper_script_\(ProcessInfo.processInfo.processIdentifier)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        var chapterInfo: [(title: String, aacPath: String, duration: Double)] = []
+
+        for (sceneIdx, scene) in script.scenes.enumerated() {
+            if !quiet {
+                fputs("[\(sceneIdx + 1)/\(script.scenes.count)] \(scene.title)\n", stderr)
+            }
+
+            var sceneSamples: [Float] = []
+            let totalEntries = scene.entries.count
+            var reporter = ProgressReporter(totalChunks: totalEntries, quiet: quiet)
+
+            for entry in scene.entries {
+                let voice: Voice
+                let text: String
+
+                switch entry.type {
+                case .dialogue(let char):
+                    guard let v = charVoices[char] else { continue }
+                    voice = v
+                    text = entry.text
+                    reporter.update(chunkText: "\(char): \(text.prefix(40))")
+                case .stageDirection:
+                    guard readStage else { continue }
+                    voice = narrator
+                    text = entry.text
+                    reporter.update(chunkText: "[stage] \(text.prefix(40))")
+                }
+
+                let result = try engine.synthesize(text: text, voice: voice, speed: speed)
+                sceneSamples.append(contentsOf: result.samples)
+            }
+
+            reporter.finish(summary: "")
+
+            guard !sceneSamples.isEmpty else { continue }
+
+            // Write scene audio to WAV then encode to AAC
+            let wavPath = tmpDir.appendingPathComponent("scene\(sceneIdx + 1).wav")
+            try writeWav(samples: sceneSamples, sampleRate: 24000, to: wavPath)
+
+            let aacPath = tmpDir.appendingPathComponent("scene\(sceneIdx + 1).aac").path
+            try AudiobookAssembler.encodeAAC(wavPath: wavPath.path, output: aacPath)
+            try? FileManager.default.removeItem(at: wavPath)
+
+            let duration = Double(sceneSamples.count) / 24000.0
+            chapterInfo.append((title: scene.title, aacPath: aacPath, duration: duration))
+
+            if !quiet {
+                fputs("  \(scene.title) (\(String(format: "%.1f", duration))s)\n", stderr)
+            }
+        }
+
+        // Assemble M4B
+        try AudiobookAssembler.assembleM4B(
+            chapters: chapterInfo,
+            output: outputPath,
+            title: finalTitle,
+            author: finalAuthor,
+            coverArtPath: nil
+        )
+
+        let totalDuration = chapterInfo.reduce(0.0) { $0 + $1.duration }
+        let minutes = Int(totalDuration) / 60
+        let seconds = Int(totalDuration) % 60
+        if !quiet {
+            fputs("Created \(outputPath) (\(minutes):\(String(format: "%02d", seconds)))\n", stderr)
+        }
+    }
+
+    /// Load script config from --script-config flag or auto-discover.
+    private func loadScriptConfig() throws -> ScriptConfig? {
+        if let configPath = scriptConfig {
+            return try ScriptConfig.load(from: configPath)
+        }
+        guard inputs.count == 1 else { return nil }
+        let dir = URL(fileURLWithPath: inputs[0]).deletingLastPathComponent().path
+        let autoPath = "\(dir)/script.yaml"
+        if FileManager.default.fileExists(atPath: autoPath) {
+            return try ScriptConfig.load(from: autoPath)
+        }
+        return nil
     }
 
     private func writeWav(samples: [Float], sampleRate: Int, to url: URL) throws {

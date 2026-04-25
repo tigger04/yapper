@@ -642,15 +642,21 @@ TOTAL=$((TOTAL + 1))
 set +e
 "${YAPPER}" speak --voice af_heart "${_RT22_TEXT}" &
 _rt222_pid=$!
-# Wait for first chunk to start playing, then check if second chunk WAV exists
-sleep 5
-_rt222_wav1=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt222_pid}_1.wav" 2>/dev/null | head -1)
-_rt222_wav2=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt222_pid}_2.wav" 2>/dev/null | head -1)
-# Also check if afplay is still running (playing chunk 1)
+# Poll for evidence of overlap: afplay running OR multiple WAV files.
+# Allow up to 15 seconds for model load + first chunk synthesis + overlap.
 _rt222_afplay_running=false
-if pgrep -P "${_rt222_pid}" afplay >/dev/null 2>&1; then
-    _rt222_afplay_running=true
-fi
+_rt222_wav2=""
+for _i in $(seq 1 30); do
+    sleep 0.5
+    if pgrep -P "${_rt222_pid}" afplay >/dev/null 2>&1; then
+        _rt222_afplay_running=true
+        _rt222_wav2=$(find /tmp -maxdepth 1 -name "yapper_speak_${_rt222_pid}_2.wav" 2>/dev/null | head -1)
+        break
+    fi
+    if ! kill -0 "${_rt222_pid}" 2>/dev/null; then
+        break
+    fi
+done
 kill "${_rt222_pid}" 2>/dev/null
 wait "${_rt222_pid}" 2>/dev/null
 set -e
