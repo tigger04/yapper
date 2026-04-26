@@ -103,14 +103,17 @@ The output format is inferred from: `--format` flag > `-o` file extension > auto
 Convert plays and screenplays with distinct voices per character:
 
 ```bash
-# Place a script.yaml alongside the script file
+# Force script mode with defaults (no config file needed)
+yapper convert play.org --script
+
+# Auto-detect from script.yaml alongside the script file
 yapper convert play.org
 
-# Or specify the config explicitly
+# Specify config explicitly
 yapper convert play.fountain --script-config config.yaml
 
 # Preview cast and structure
-yapper convert play.org --dry-run
+yapper convert play.org --script --dry-run
 
 # Control concurrency
 yapper convert play.org --threads 1
@@ -167,6 +170,7 @@ Examples: `bf` = British female, `am` = American male, `a` = any American, `f` =
 | `--non-interactive` | convert | Skip interactive prompts |
 | `-o <path>` | convert | Output file path |
 | `--format <fmt>` | convert | Output format (m4a, mp3, m4b) |
+| `--script` | convert | Force script mode using defaults |
 | `--threads <n>` | convert | Worker processes for script mode |
 | `--script-config <path>` | convert | Path to script YAML config |
 | `--title <text>` | convert | Title metadata |

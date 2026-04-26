@@ -51,6 +51,9 @@ struct ConvertCommand: ParsableCommand {
     @Option(name: .long, help: "Path to script.yaml config file for script-reading mode.")
     var scriptConfig: String?
 
+    @Flag(name: .long, help: "Force script mode using defaults (or global config). No script.yaml required.")
+    var script: Bool = false
+
     @Option(name: .long, help: "Number of concurrent synthesis worker processes (default: 3). Use 1 for sequential.")
     var threads: Int?
 
@@ -89,17 +92,27 @@ struct ConvertCommand: ParsableCommand {
             }
         }
 
-        // Script mode: detect config file and attempt script parsing
-        let hasScriptConfig = scriptConfig != nil || {
+        // Script mode: detect config file, --script flag, or yapper.yaml with script keys
+        let hasScriptConfig = script || scriptConfig != nil || {
             guard inputs.count == 1 else { return false }
             let dir = URL(fileURLWithPath: inputs[0]).deletingLastPathComponent().path
-            return FileManager.default.fileExists(atPath: "\(dir)/script.yaml")
+            if FileManager.default.fileExists(atPath: "\(dir)/script.yaml") { return true }
+            // Also check yapper.yaml for script-specific keys
+            if FileManager.default.fileExists(atPath: "\(dir)/yapper.yaml"),
+               let config = try? ScriptConfig.load(from: "\(dir)/yapper.yaml"),
+               config.characterVoices != nil || config.narratorVoice != nil
+                   || config.renderStageDirections != nil {
+                return true
+            }
+            return false
         }()
 
         if hasScriptConfig {
             if let scriptDoc = try detectAndParseScript() {
                 if !quiet {
-                    let configSource = scriptConfig ?? "script.yaml (auto-discovered)"
+                    let configSource: String
+                    if script { configSource = "--script flag" }
+                    else { configSource = scriptConfig ?? "script.yaml (auto-discovered)" }
                     fputs("Script mode: using \(configSource)\n", stderr)
                 }
                 if dryRun {

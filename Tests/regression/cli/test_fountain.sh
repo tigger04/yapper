@@ -527,6 +527,40 @@ test_RT26_30() {
 run_test "RT-26.30" "--threads works with Fountain" test_RT26_30
 
 # ---------------------------------------------------------------------------
+# --script flag (validates BYPASS addition)
+# ---------------------------------------------------------------------------
+
+# RT-26.31: --script flag forces script mode without any config file.
+test_RT26_31() {
+    local output
+    output=$("${YAPPER}" convert "${FOUNTAIN}" --script --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "Script mode" || return 1
+    printf '%s' "${output}" | grep -qi "ALICE" || return 1
+    printf '%s' "${output}" | grep -qi "script flag" || return 1
+}
+run_test "RT-26.31" "--script forces script mode without config" test_RT26_31
+
+# RT-26.32: --script with org-mode file also works.
+test_RT26_32() {
+    local org="${SUITE_TMP}/no_config.org"
+    cat > "${org}" <<'ORG'
+#+TITLE: No Config Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+Hello.
+**** BOB
+Goodbye.
+ORG
+    local output
+    output=$("${YAPPER}" convert "${org}" --script --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "Script mode" || return 1
+    printf '%s' "${output}" | grep -qi "ALICE" || return 1
+    printf '%s' "${output}" | grep -qi "BOB" || return 1
+}
+run_test "RT-26.32" "--script works with org-mode" test_RT26_32
+
+# ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
 summarise "Fountain format"
