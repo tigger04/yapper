@@ -25,7 +25,11 @@ struct ScriptDocument {
     var title: String?
     var author: String?
     var characters: [String]
+    var characterDescriptions: [(name: String, description: String)]
+    var outline: String?
+    var preamble: [String]
     var scenes: [ScriptScene]
+    var footnotes: [String: String]
 }
 
 /// Detects whether a file contains script patterns and parses accordingly.
@@ -83,6 +87,9 @@ struct ScriptParser {
         var dialogueLines: [String] = []
         var characters = Set<String>()
         var sceneStarted = false
+        var preambleLines: [String] = []
+        var footnotes: [String: String] = [:]
+        var inPreambleArea = true
 
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -97,9 +104,22 @@ struct ScriptParser {
                 continue
             }
 
+            // Markdown footnote definitions: [^name]: definition
+            if trimmed.hasPrefix("[^") {
+                if let closeBracket = trimmed.firstIndex(of: "]"),
+                   trimmed[trimmed.index(after: closeBracket)...].hasPrefix(":") {
+                    let name = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 2)..<closeBracket])
+                    let definition = String(trimmed[trimmed.index(closeBracket, offsetBy: 2)...])
+                        .trimmingCharacters(in: .whitespaces)
+                    if !name.isEmpty && !definition.isEmpty {
+                        footnotes[name] = definition
+                    }
+                }
+                continue
+            }
+
             // Scene boundary: ### heading
             if trimmed.hasPrefix("### ") {
-                // Flush current dialogue
                 flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
                 if sceneStarted {
                     scenes.append(currentScene)
@@ -107,11 +127,22 @@ struct ScriptParser {
                 let sceneTitle = String(trimmed.dropFirst(4)).trimmingCharacters(in: .whitespaces)
                 currentScene = ScriptScene(title: sceneTitle, entries: [])
                 sceneStarted = true
+                inPreambleArea = false
                 continue
             }
 
             // Skip ## headings (act markers)
             if trimmed.hasPrefix("## ") || trimmed.hasPrefix("# ") {
+                inPreambleArea = false
+                continue
+            }
+
+            // Preamble text: before first scene, not metadata, not empty
+            if inPreambleArea && !trimmed.isEmpty {
+                // Skip italic lines in preamble (they're not stage directions yet)
+                if !(trimmed.hasPrefix("*") && trimmed.hasSuffix("*")) {
+                    preambleLines.append(trimmed)
+                }
                 continue
             }
 
@@ -130,7 +161,6 @@ struct ScriptParser {
                 if let endBold = trimmed.range(of: "**", range: trimmed.index(trimmed.startIndex, offsetBy: 2)..<trimmed.endIndex) {
                     flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
                     var charRaw = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 2)..<endBold.lowerBound])
-                    // Remove trailing colon
                     if charRaw.hasSuffix(":") { charRaw = String(charRaw.dropLast()) }
                     let charName = extractCharacterName(charRaw, knownCharacters: knownCharacters)
                     if !charName.isEmpty {
@@ -152,7 +182,6 @@ struct ScriptParser {
             scenes.append(currentScene)
         }
 
-        // If no scenes were found but there are entries, wrap in a single scene
         if scenes.isEmpty && !currentScene.entries.isEmpty {
             scenes.append(currentScene)
         }
@@ -163,7 +192,11 @@ struct ScriptParser {
             title: config?.title ?? title,
             author: config?.author ?? author,
             characters: Array(characters).sorted(),
-            scenes: scenes
+            characterDescriptions: [],
+            outline: nil,
+            preamble: preambleLines,
+            scenes: scenes,
+            footnotes: footnotes
         )
     }
 
@@ -185,6 +218,16 @@ struct ScriptParser {
         var characters = Set<String>()
         var sceneStarted = false
 
+        // Preamble content
+        var charDescriptions: [(name: String, description: String)] = []
+        var outline: String?
+        var preambleLines: [String] = []
+        var footnotes: [String: String] = [:]
+
+        // Track which L1 heading we're under (for preamble extraction)
+        var currentL1Heading: String?
+        var inPreambleArea = true  // Before first scene
+
         for line in lines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
 
@@ -197,6 +240,21 @@ struct ScriptParser {
                 author = String(trimmed.dropFirst(9)).trimmingCharacters(in: .whitespaces)
                 continue
             }
+            // Skip other org directives
+            if trimmed.hasPrefix("#+") { continue }
+
+            // Footnote definitions: [fn:name] definition text
+            if trimmed.hasPrefix("[fn:") {
+                if let closeBracket = trimmed.firstIndex(of: "]") {
+                    let name = String(trimmed[trimmed.index(trimmed.startIndex, offsetBy: 4)..<closeBracket])
+                    let definition = String(trimmed[trimmed.index(after: closeBracket)...])
+                        .trimmingCharacters(in: .whitespaces)
+                    if !name.isEmpty && !definition.isEmpty {
+                        footnotes[name] = definition
+                    }
+                }
+                continue
+            }
 
             // Scene boundary: ** heading (L2)
             if trimmed.hasPrefix("** ") && !trimmed.hasPrefix("*** ") {
@@ -207,6 +265,7 @@ struct ScriptParser {
                 let sceneTitle = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 currentScene = ScriptScene(title: sceneTitle, entries: [])
                 sceneStarted = true
+                inPreambleArea = false
                 continue
             }
 
@@ -231,12 +290,46 @@ struct ScriptParser {
                 continue
             }
 
-            // Skip * headings (act/top-level markers)
-            if trimmed.hasPrefix("* ") || trimmed.hasPrefix("#+") {
+            // L1 heading: track for preamble section detection
+            if trimmed.hasPrefix("* ") {
+                let heading = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                currentL1Heading = heading.lowercased()
                 continue
             }
 
-            // Skip table rows and empty lines in header area
+            // In preamble area: extract character descriptions and outline
+            if inPreambleArea {
+                // Parse org table rows for character descriptions
+                if trimmed.hasPrefix("|") && !trimmed.hasPrefix("|---") {
+                    let cells = trimmed.split(separator: "|").map {
+                        $0.trimmingCharacters(in: .whitespaces)
+                    }
+                    if cells.count >= 2 {
+                        let name = cells[0]
+                        let desc = cells[1]
+                        if !name.isEmpty && !desc.isEmpty {
+                            charDescriptions.append((name: name, description: desc))
+                        }
+                    }
+                    continue
+                }
+                // Table separator rows
+                if trimmed.hasPrefix("|---") { continue }
+
+                // Outline section body text
+                if currentL1Heading == "outline" && !trimmed.isEmpty {
+                    outline = trimmed
+                    continue
+                }
+
+                // Other preamble text (not in a table, not empty)
+                if !trimmed.isEmpty && currentL1Heading != nil {
+                    preambleLines.append(trimmed)
+                }
+                continue
+            }
+
+            // Skip table rows and empty lines outside dialogue
             if trimmed.hasPrefix("|") || trimmed.isEmpty {
                 if currentCharacter == nil { continue }
             }
@@ -263,7 +356,11 @@ struct ScriptParser {
             title: config?.title ?? title,
             author: config?.author ?? author,
             characters: Array(characters).sorted(),
-            scenes: scenes
+            characterDescriptions: charDescriptions,
+            outline: outline,
+            preamble: preambleLines,
+            scenes: scenes,
+            footnotes: footnotes
         )
     }
 
@@ -377,5 +474,50 @@ struct ScriptParser {
             }
         }
         return result
+    }
+
+    // MARK: - Footnote processing
+
+    /// Strip footnote references from text and return the referenced names.
+    ///
+    /// Handles both org-mode `[fn:name]` and markdown `[^name]` patterns.
+    /// Returns the cleaned text and an ordered list of footnote names found.
+    static func stripFootnoteReferences(_ text: String) -> (text: String, footnoteNames: [String]) {
+        var result = text
+        var names: [String] = []
+
+        // Org-mode: [fn:name]
+        let orgPattern = try? NSRegularExpression(pattern: #"\[fn:([^\]]+)\]"#)
+        if let regex = orgPattern {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2,
+                   let nameRange = Range(match.range(at: 1), in: result) {
+                    names.insert(String(result[nameRange]), at: 0)
+                }
+                if let fullRange = Range(match.range, in: result) {
+                    result.replaceSubrange(fullRange, with: "")
+                }
+            }
+        }
+
+        // Markdown: [^name]
+        let mdPattern = try? NSRegularExpression(pattern: #"\[\^([^\]]+)\]"#)
+        if let regex = mdPattern {
+            let range = NSRange(result.startIndex..., in: result)
+            let matches = regex.matches(in: result, range: range)
+            for match in matches.reversed() {
+                if match.numberOfRanges >= 2,
+                   let nameRange = Range(match.range(at: 1), in: result) {
+                    names.insert(String(result[nameRange]), at: 0)
+                }
+                if let fullRange = Range(match.range, in: result) {
+                    result.replaceSubrange(fullRange, with: "")
+                }
+            }
+        }
+
+        return (result.trimmingCharacters(in: .whitespaces), names)
     }
 }

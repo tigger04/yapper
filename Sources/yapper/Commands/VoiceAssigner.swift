@@ -95,6 +95,11 @@ struct VoiceAssigner {
     }
 
     /// Parse a filter shorthand like "bf" → VoiceFilter(accent: .british, gender: .female)
+    static func parseFilterPublic(_ spec: String) -> VoiceFilter? {
+        return parseFilter(spec)
+    }
+
+    /// Parse a filter shorthand like "bf" → VoiceFilter(accent: .british, gender: .female)
     private static func parseFilter(_ spec: String) -> VoiceFilter? {
         guard !spec.isEmpty else { return nil }
         let lower = spec.lowercased()

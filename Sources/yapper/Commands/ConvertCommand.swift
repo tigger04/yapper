@@ -861,6 +861,24 @@ struct ConvertCommand: ParsableCommand {
         )
 
         let readStage = config?.readStageDirections ?? true
+        let renderIntro = config?.renderIntro ?? true
+        let renderFootnotes = config?.renderFootnotes ?? true
+        let knownChars = Set(script.characters)
+
+        // Resolve intro voice
+        let introVoiceName: String
+        if let spec = config?.introVoice {
+            if spec.contains("_"), let v = registry.voices.first(where: { $0.name == spec }) {
+                introVoiceName = v.name
+            } else if let filter = VoiceAssigner.parseFilterPublic(spec),
+                      let v = registry.list(filter: filter).first {
+                introVoiceName = v.name
+            } else {
+                introVoiceName = narrator.name
+            }
+        } else {
+            introVoiceName = narrator.name
+        }
 
         print("Script mode: \(script.title ?? "Untitled")")
         if let author = script.author { print("  Author: \(author)") }
@@ -871,21 +889,53 @@ struct ConvertCommand: ParsableCommand {
             print("  \(char): \(voiceName)")
         }
         print("  Narrator (stage directions): \(narrator.name)")
+        if renderIntro {
+            print("  Introduction: \(introVoiceName)")
+        }
         print("")
+
+        // Preamble preview
+        if renderIntro {
+            print("Introduction:")
+            if let title = script.title { print("    \(title)") }
+            if let author = script.author { print("    by \(author)") }
+            for desc in script.characterDescriptions {
+                print("    \(desc.name): \(desc.description)")
+            }
+            if let outline = script.outline {
+                let preview = outline.prefix(80)
+                print("    \(preview)\(outline.count > 80 ? "..." : "")")
+            }
+            for line in script.preamble.prefix(3) {
+                let preview = line.prefix(80)
+                print("    \(preview)\(line.count > 80 ? "..." : "")")
+            }
+            print("")
+        }
+
         print("Scenes: \(script.scenes.count)")
         for (i, scene) in script.scenes.enumerated() {
             print("  [\(i + 1)/\(script.scenes.count)] \(scene.title)")
-            // Show first few entries as preview
             for entry in scene.entries.prefix(5) {
                 switch entry.type {
                 case .dialogue(let char):
                     let voiceName = charVoices[char]?.name ?? "?"
-                    let preview = entry.text.prefix(60)
-                    print("    \(char) (\(voiceName)): \(preview)\(entry.text.count > 60 ? "..." : "")")
+                    var displayText = entry.text
+                    if renderFootnotes || !script.footnotes.isEmpty {
+                        let (stripped, _) = ScriptParser.stripFootnoteReferences(displayText)
+                        displayText = stripped
+                    }
+                    let preview = displayText.prefix(60)
+                    print("    \(char) (\(voiceName)): \(preview)\(displayText.count > 60 ? "..." : "")")
                 case .stageDirection:
                     if readStage {
-                        let knownChars = Set(script.characters)
-                        let displayText = ScriptParser.titleCaseCharacterNames(in: entry.text, knownCharacters: knownChars)
+                        var displayText = ScriptParser.titleCaseCharacterNames(
+                            in: entry.text, knownCharacters: knownChars
+                        )
+                        if renderFootnotes || !script.footnotes.isEmpty {
+                            let (stripped, _) = ScriptParser.stripFootnoteReferences(displayText)
+                            displayText = stripped
+                        }
                         let preview = displayText.prefix(60)
                         print("    [stage] (\(narrator.name)): \(preview)\(displayText.count > 60 ? "..." : "")")
                     }
@@ -895,6 +945,17 @@ struct ConvertCommand: ParsableCommand {
                 print("    ... and \(scene.entries.count - 5) more entries")
             }
         }
+
+        // Footnotes summary
+        if !script.footnotes.isEmpty {
+            print("")
+            print("Footnotes: \(script.footnotes.count)")
+            for (name, definition) in script.footnotes {
+                let preview = definition.prefix(60)
+                print("    [\(name)] \(preview)\(definition.count > 60 ? "..." : "")")
+            }
+        }
+
         print("")
         print("(dry run — no synthesis performed)")
     }
@@ -976,7 +1037,69 @@ struct ConvertCommand: ParsableCommand {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
 
+        let renderIntro = config?.renderIntro ?? true
+        let renderFootnotes = config?.renderFootnotes ?? true
+
+        // Resolve intro voice
+        let introVoice: Voice
+        if let spec = config?.introVoice {
+            if spec.contains("_"), let v = engine.voiceRegistry.voices.first(where: { $0.name == spec }) {
+                introVoice = v
+            } else if let filter = VoiceAssigner.parseFilterPublic(spec),
+                      let v = engine.voiceRegistry.list(filter: filter).first {
+                introVoice = v
+            } else {
+                introVoice = narrator
+            }
+        } else {
+            introVoice = narrator
+        }
+
         var chapterInfo: [(title: String, aacPath: String, duration: Double)] = []
+
+        // Synthesise preamble chapter (introduction)
+        if renderIntro {
+            var preambleText: [String] = []
+
+            // Title and author announcement
+            if let t = finalTitle { preambleText.append(t) }
+            if let a = finalAuthor { preambleText.append("by \(a)") }
+
+            // Character descriptions
+            for desc in script.characterDescriptions {
+                preambleText.append("\(desc.name): \(desc.description)")
+            }
+
+            // Outline
+            if let outline = script.outline {
+                preambleText.append(outline)
+            }
+
+            // Other preamble content
+            preambleText.append(contentsOf: script.preamble)
+
+            if !preambleText.isEmpty {
+                if !quiet { fputs("Synthesising introduction...\n", stderr) }
+                let introText = preambleText.joined(separator: "\n\n")
+                let result = try engine.synthesize(
+                    text: introText, voice: introVoice, speed: speed
+                )
+                let introWavPath = tmpDir.appendingPathComponent("intro.wav")
+                try writeWav(samples: result.samples, sampleRate: 24000, to: introWavPath)
+                let introAacPath = tmpDir.appendingPathComponent("intro.aac").path
+                try AudiobookAssembler.encodeAAC(wavPath: introWavPath.path, output: introAacPath)
+                try? FileManager.default.removeItem(at: introWavPath)
+                let introDuration = Double(result.samples.count) / 24000.0
+                chapterInfo.append((
+                    title: finalTitle ?? "Introduction",
+                    aacPath: introAacPath,
+                    duration: introDuration
+                ))
+                if !quiet {
+                    fputs("  Introduction (\(String(format: "%.1f", introDuration))s)\n", stderr)
+                }
+            }
+        }
 
         // Build work items for all scenes
         struct WorkItem {
@@ -995,27 +1118,71 @@ struct ConvertCommand: ParsableCommand {
             }
 
             var workItems: [WorkItem] = []
+            // Use a sub-index for footnote aside entries to avoid index collisions
+            var nextSubIdx = scene.entries.count
+
             for (entryIdx, entry) in scene.entries.enumerated() {
                 switch entry.type {
                 case .dialogue(let char):
                     guard let v = charVoices[char] else { continue }
+                    var text = entry.text
+
+                    // Strip footnote references and optionally insert narrator asides
+                    let (stripped, fnNames) = ScriptParser.stripFootnoteReferences(text)
+                    text = stripped
+
                     workItems.append(WorkItem(
                         sceneIdx: sceneIdx, entryIdx: entryIdx,
-                        text: entry.text, voiceName: v.name,
+                        text: text, voiceName: v.name,
                         entrySpeed: dialogueSpeed, gap: gapDialogue,
                         label: "\(char)"
                     ))
+
+                    // Insert footnote definition as narrator aside after the dialogue line
+                    if renderFootnotes {
+                        for fnName in fnNames {
+                            if let definition = script.footnotes[fnName] {
+                                workItems.append(WorkItem(
+                                    sceneIdx: sceneIdx, entryIdx: nextSubIdx,
+                                    text: definition, voiceName: narrator.name,
+                                    entrySpeed: stageDirectionSpeed, gap: gapStageDirection,
+                                    label: "[footnote]"
+                                ))
+                                nextSubIdx += 1
+                            }
+                        }
+                    }
+
                 case .stageDirection:
                     guard readStage else { continue }
-                    let titleCasedText = ScriptParser.titleCaseCharacterNames(
+                    var titleCasedText = ScriptParser.titleCaseCharacterNames(
                         in: entry.text, knownCharacters: knownChars
                     )
+
+                    // Strip footnote references from stage directions too
+                    let (stripped, fnNames) = ScriptParser.stripFootnoteReferences(titleCasedText)
+                    titleCasedText = stripped
+
                     workItems.append(WorkItem(
                         sceneIdx: sceneIdx, entryIdx: entryIdx,
                         text: titleCasedText, voiceName: narrator.name,
                         entrySpeed: stageDirectionSpeed, gap: gapStageDirection,
                         label: "[stage]"
                     ))
+
+                    if renderFootnotes {
+                        for fnName in fnNames {
+                            if let definition = script.footnotes[fnName] {
+                                workItems.append(WorkItem(
+                                    sceneIdx: sceneIdx, entryIdx: nextSubIdx,
+                                    text: definition, voiceName: narrator.name,
+                                    entrySpeed: stageDirectionSpeed, gap: gapStageDirection,
+                                    label: "[footnote]"
+                                ))
+                                nextSubIdx += 1
+                            }
+                        }
+                    }
                 }
             }
 
