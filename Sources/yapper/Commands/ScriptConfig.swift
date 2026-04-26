@@ -26,6 +26,9 @@ struct ScriptConfig: Decodable {
     var introVoice: String?
     var renderFootnotes: Bool?
 
+    // Pronunciation substitutions: applied to text before synthesis
+    var speechSubstitution: [String: String]?
+
     enum CodingKeys: String, CodingKey {
         case title, author, threads
         case autoAssignVoices = "auto-assign-voices"
@@ -40,6 +43,7 @@ struct ScriptConfig: Decodable {
         case renderIntro = "render-intro"
         case introVoice = "intro-voice"
         case renderFootnotes = "render-footnotes"
+        case speechSubstitution = "speech-substitution"
     }
 
     /// Load config from a YAML file path.

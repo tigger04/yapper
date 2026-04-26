@@ -1039,6 +1039,7 @@ struct ConvertCommand: ParsableCommand {
 
         let renderIntro = config?.renderIntro ?? true
         let renderFootnotes = config?.renderFootnotes ?? true
+        let substitutions = config?.speechSubstitution ?? [:]
 
         // Resolve intro voice
         let introVoice: Voice
@@ -1080,7 +1081,7 @@ struct ConvertCommand: ParsableCommand {
 
             if !preambleText.isEmpty {
                 if !quiet { fputs("Synthesising introduction...\n", stderr) }
-                let introText = preambleText.joined(separator: "\n\n")
+                let introText = applySubs(preambleText.joined(separator: "\n\n"))
                 let result = try engine.synthesize(
                     text: introText, voice: introVoice, speed: speed
                 )
@@ -1099,6 +1100,16 @@ struct ConvertCommand: ParsableCommand {
                     fputs("  Introduction (\(String(format: "%.1f", introDuration))s)\n", stderr)
                 }
             }
+        }
+
+        // Apply speech substitutions to text before synthesis
+        func applySubs(_ text: String) -> String {
+            guard !substitutions.isEmpty else { return text }
+            var result = text
+            for (find, replace) in substitutions {
+                result = result.replacingOccurrences(of: find, with: replace)
+            }
+            return result
         }
 
         // Build work items for all scenes
@@ -1129,7 +1140,7 @@ struct ConvertCommand: ParsableCommand {
 
                     // Strip footnote references and optionally insert narrator asides
                     let (stripped, fnNames) = ScriptParser.stripFootnoteReferences(text)
-                    text = stripped
+                    text = applySubs(stripped)
 
                     workItems.append(WorkItem(
                         sceneIdx: sceneIdx, entryIdx: entryIdx,
@@ -1161,7 +1172,7 @@ struct ConvertCommand: ParsableCommand {
 
                     // Strip footnote references from stage directions too
                     let (stripped, fnNames) = ScriptParser.stripFootnoteReferences(titleCasedText)
-                    titleCasedText = stripped
+                    titleCasedText = applySubs(stripped)
 
                     workItems.append(WorkItem(
                         sceneIdx: sceneIdx, entryIdx: entryIdx,
