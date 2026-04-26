@@ -383,18 +383,50 @@ run_test "RT-26.23" "boneyard blocks stripped" test_RT26_23
 
 # RT-26.24: CUT TO: rendered as stage direction.
 test_RT26_24() {
+    # Use a small fixture so CUT TO: isn't truncated by the 5-entry preview
+    local trans="${SUITE_TMP}/transition.fountain"
+    cat > "${trans}" <<'FOUNTAIN'
+Title: Transition Test
+
+INT. ROOM - DAY
+
+ALICE
+Hello.
+
+CUT TO:
+
+EXT. GARDEN - DAY
+
+BOB
+Goodbye.
+FOUNTAIN
     local output
-    output=$("${YAPPER}" convert "${FOUNTAIN}" --script-config "${CONFIG}" \
+    output=$("${YAPPER}" convert "${trans}" --script-config "${CONFIG}" \
         --dry-run --non-interactive 2>&1)
-    # CUT TO: should appear as a stage direction, not a character
     printf '%s' "${output}" | grep -qi "CUT TO\|cut to" || return 1
 }
 run_test "RT-26.24" "CUT TO: rendered as stage direction" test_RT26_24
 
 # RT-26.25: Forced transition rendered as stage direction.
 test_RT26_25() {
+    local trans="${SUITE_TMP}/forced_trans.fountain"
+    cat > "${trans}" <<'FOUNTAIN'
+Title: Forced Transition Test
+
+INT. ROOM - DAY
+
+ALICE
+Hello.
+
+>FADE TO BLACK.
+
+EXT. GARDEN - DAY
+
+BOB
+Goodbye.
+FOUNTAIN
     local output
-    output=$("${YAPPER}" convert "${FORCED}" --script-config "${CONFIG}" \
+    output=$("${YAPPER}" convert "${trans}" --script-config "${CONFIG}" \
         --dry-run --non-interactive 2>&1)
     printf '%s' "${output}" | grep -qi "FADE TO BLACK\|fade to black" || return 1
 }

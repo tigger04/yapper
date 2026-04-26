@@ -1023,6 +1023,10 @@ struct ConvertCommand: ParsableCommand {
             if !quiet { fputs("Backed up existing \(outputPath) to \(backupPath)\n", stderr) }
         }
 
+        let renderIntro = config?.renderIntro ?? true
+        let renderFootnotes = config?.renderFootnotes ?? true
+        let substitutions = config?.speechSubstitution ?? [:]
+
         if !quiet {
             fputs("Script mode: \(script.title ?? "Untitled")\n", stderr)
             fputs("Cast: \(script.characters.map { "\($0)=\(charVoices[$0]?.name ?? "?")" }.joined(separator: ", "))\n", stderr)
@@ -1041,10 +1045,6 @@ struct ConvertCommand: ParsableCommand {
             .appendingPathComponent("yapper_script_\(ProcessInfo.processInfo.processIdentifier)")
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
-
-        let renderIntro = config?.renderIntro ?? true
-        let renderFootnotes = config?.renderFootnotes ?? true
-        let substitutions = config?.speechSubstitution ?? [:]
 
         // Resolve intro voice
         let introVoice: Voice

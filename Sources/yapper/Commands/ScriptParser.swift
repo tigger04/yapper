@@ -54,6 +54,8 @@ struct ScriptParser {
             return parseOrg(content: content, config: config, knownCharacters: knownChars)
         case "md", "markdown":
             return parseMd(content: content, config: config, knownCharacters: knownChars)
+        case "fountain", "spmd":
+            return parseFountain(content: content, config: config, knownCharacters: knownChars)
         default:
             return nil
         }
@@ -362,6 +364,359 @@ struct ScriptParser {
             scenes: scenes,
             footnotes: footnotes
         )
+    }
+
+    // MARK: - Character name extraction
+
+    // MARK: - Fountain parser
+
+    /// Parse Fountain screenplay format.
+    /// Scene headings: INT./EXT./EST./I/E or forced with leading period.
+    /// Character: ALL-CAPS line preceded by blank line.
+    /// Dialogue: text following character line.
+    /// Action: everything else (becomes stage direction).
+    private static func parseFountain(content: String, config: ScriptConfig?, knownCharacters: Set<String>) -> ScriptDocument? {
+        // Strip boneyard (/* ... */) first
+        var cleaned = content
+        if let boneyardRegex = try? NSRegularExpression(pattern: #"/\*[\s\S]*?\*/"#, options: []) {
+            let range = NSRange(cleaned.startIndex..., in: cleaned)
+            cleaned = boneyardRegex.stringByReplacingMatches(in: cleaned, range: range, withTemplate: "")
+        }
+
+        // Strip notes ([[ ... ]])
+        if let noteRegex = try? NSRegularExpression(pattern: #"\[\[.*?\]\]"#, options: [.dotMatchesLineSeparators]) {
+            let range = NSRange(cleaned.startIndex..., in: cleaned)
+            cleaned = noteRegex.stringByReplacingMatches(in: cleaned, range: range, withTemplate: "")
+        }
+
+        // Strip emphasis markers (*italic*, **bold**, ***bold-italic***, _underline_)
+        cleaned = stripEmphasis(cleaned)
+
+        let lines = cleaned.components(separatedBy: "\n")
+
+        var title: String?
+        var author: String?
+        var preambleLines: [String] = []
+        var scenes: [ScriptScene] = []
+        var currentScene = ScriptScene(title: "Untitled", entries: [])
+        var currentCharacter: String?
+        var dialogueLines: [String] = []
+        var characters = Set<String>()
+        var sceneStarted = false
+        var inTitlePage = true
+        var inDialogue = false
+
+        // Scene heading pattern: INT, EXT, EST, INT./EXT, INT/EXT, I/E
+        let sceneHeadingPrefixes = ["INT.", "EXT.", "EST.", "INT./EXT.", "INT/EXT.", "I/E.",
+                                     "INT ", "EXT ", "EST ", "INT./EXT ", "INT/EXT ", "I/E "]
+
+        func isSceneHeading(_ line: String) -> Bool {
+            let upper = line.uppercased()
+            // Forced scene heading: leading period
+            if line.hasPrefix(".") && line.count > 1 && !line.hasPrefix("..") {
+                return true
+            }
+            for prefix in sceneHeadingPrefixes {
+                if upper.hasPrefix(prefix) { return true }
+            }
+            return false
+        }
+
+        func isCharacterLine(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return false }
+            // Forced character: leading @
+            if trimmed.hasPrefix("@") { return true }
+            // Must contain at least one letter
+            guard trimmed.contains(where: { $0.isLetter }) else { return false }
+            // Strip parenthetical extension for the check
+            var nameOnly = trimmed
+            if let parenStart = nameOnly.firstIndex(of: "(") {
+                nameOnly = String(nameOnly[..<parenStart]).trimmingCharacters(in: .whitespaces)
+            }
+            // All letters must be uppercase (allows numbers, punctuation)
+            let letters = nameOnly.filter { $0.isLetter }
+            return !letters.isEmpty && letters.allSatisfy { $0.isUppercase }
+        }
+
+        func isTransition(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Forced transition: leading >
+            if trimmed.hasPrefix(">") && !trimmed.hasSuffix("<") { return true }
+            // Standard: all uppercase ending in TO:
+            let upper = trimmed.uppercased()
+            return trimmed == upper && trimmed.hasSuffix("TO:")
+        }
+
+        func isParenthetical(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix("(") && trimmed.hasSuffix(")")
+        }
+
+        func isForcedAction(_ line: String) -> Bool {
+            return line.hasPrefix("!")
+        }
+
+        func isCenteredText(_ line: String) -> Bool {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix(">") && trimmed.hasSuffix("<")
+        }
+
+        func cleanSceneTitle(_ line: String) -> String {
+            var title = line
+            // Strip forced heading prefix
+            if title.hasPrefix(".") { title = String(title.dropFirst()) }
+            // Strip scene numbers (#number#)
+            if let regex = try? NSRegularExpression(pattern: #"\s*#[^#]+#\s*$"#) {
+                let range = NSRange(title.startIndex..., in: title)
+                title = regex.stringByReplacingMatches(in: title, range: range, withTemplate: "")
+            }
+            return title.trimmingCharacters(in: .whitespaces)
+        }
+
+        var i = 0
+        while i < lines.count {
+            let line = lines[i]
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            // Title page: key-value pairs at file start, before first blank line
+            if inTitlePage {
+                if trimmed.isEmpty {
+                    inTitlePage = false
+                    i += 1
+                    continue
+                }
+                // Key: Value format
+                if let colonIdx = trimmed.firstIndex(of: ":"), colonIdx != trimmed.startIndex {
+                    let key = String(trimmed[..<colonIdx]).trimmingCharacters(in: .whitespaces).lowercased()
+                    let value = String(trimmed[trimmed.index(after: colonIdx)...]).trimmingCharacters(in: .whitespaces)
+
+                    // Check for multi-line values (indented continuation lines)
+                    var fullValue = value
+                    while i + 1 < lines.count {
+                        let nextLine = lines[i + 1]
+                        if nextLine.hasPrefix("   ") || nextLine.hasPrefix("\t") {
+                            let continued = nextLine.trimmingCharacters(in: .whitespaces)
+                            if fullValue.isEmpty {
+                                fullValue = continued
+                            } else {
+                                fullValue += " " + continued
+                            }
+                            i += 1
+                        } else {
+                            break
+                        }
+                    }
+
+                    switch key {
+                    case "title":
+                        title = fullValue
+                    case "author":
+                        author = fullValue
+                    default:
+                        if !fullValue.isEmpty {
+                            preambleLines.append("\(key.capitalized): \(fullValue)")
+                        }
+                    }
+                }
+                i += 1
+                continue
+            }
+
+            // Skip empty lines (they're paragraph delimiters)
+            if trimmed.isEmpty {
+                // Flush dialogue if we were in dialogue mode
+                if inDialogue {
+                    flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                    inDialogue = false
+                }
+                i += 1
+                continue
+            }
+
+            // Page break (===)
+            if trimmed.hasPrefix("===") && trimmed.allSatisfy({ $0 == "=" || $0 == " " }) {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                i += 1
+                continue
+            }
+
+            // Synopses (= text) — collect for outline
+            if trimmed.hasPrefix("= ") {
+                let synopsis = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                if !synopsis.isEmpty { preambleLines.append(synopsis) }
+                i += 1
+                continue
+            }
+
+            // Sections (# headers) — structural markers
+            if trimmed.hasPrefix("#") && !trimmed.hasPrefix("##") {
+                i += 1
+                continue
+            }
+            if trimmed.hasPrefix("##") {
+                i += 1
+                continue
+            }
+
+            // Lyrics (~text) — render as stage direction
+            if trimmed.hasPrefix("~") {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                let lyricText = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+                if !lyricText.isEmpty {
+                    currentScene.entries.append(ScriptEntry(type: .stageDirection, text: lyricText))
+                }
+                i += 1
+                continue
+            }
+
+            // Centered text (>text<) — stage direction
+            if isCenteredText(trimmed) {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                var centered = trimmed
+                if centered.hasPrefix(">") { centered = String(centered.dropFirst()) }
+                if centered.hasSuffix("<") { centered = String(centered.dropLast()) }
+                centered = centered.trimmingCharacters(in: .whitespaces)
+                if !centered.isEmpty {
+                    currentScene.entries.append(ScriptEntry(type: .stageDirection, text: centered))
+                }
+                i += 1
+                continue
+            }
+
+            // Scene heading
+            if isSceneHeading(trimmed) {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                if sceneStarted {
+                    scenes.append(currentScene)
+                }
+                let sceneTitle = cleanSceneTitle(trimmed)
+                currentScene = ScriptScene(title: sceneTitle, entries: [])
+                sceneStarted = true
+                i += 1
+                continue
+            }
+
+            // In dialogue mode: continuation or parenthetical
+            if inDialogue && currentCharacter != nil {
+                if isParenthetical(trimmed) {
+                    // Skip parentheticals
+                    i += 1
+                    continue
+                }
+                // Dialogue continuation
+                dialogueLines.append(trimmed)
+                i += 1
+                continue
+            }
+
+            // Forced action (!text)
+            if isForcedAction(trimmed) {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                let actionText = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+                if !actionText.isEmpty {
+                    currentScene.entries.append(ScriptEntry(type: .stageDirection, text: actionText))
+                }
+                i += 1
+                continue
+            }
+
+            // Transition (CUT TO: etc.)
+            if isTransition(trimmed) {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                inDialogue = false
+                var transText = trimmed
+                if transText.hasPrefix(">") { transText = String(transText.dropFirst()).trimmingCharacters(in: .whitespaces) }
+                currentScene.entries.append(ScriptEntry(type: .stageDirection, text: transText))
+                i += 1
+                continue
+            }
+
+            // Character line: ALL CAPS, check if next non-blank line is dialogue
+            if isCharacterLine(trimmed) {
+                // Peek ahead: next non-blank line should be dialogue or parenthetical
+                var nextContentIdx = i + 1
+                while nextContentIdx < lines.count && lines[nextContentIdx].trimmingCharacters(in: .whitespaces).isEmpty {
+                    nextContentIdx += 1
+                }
+
+                // If next line exists and isn't blank, this is likely a character
+                // (Fountain spec: character must not be followed by blank line)
+                if nextContentIdx == i + 1 && nextContentIdx < lines.count {
+                    flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+
+                    var charRaw = trimmed
+                    // Strip forced character prefix
+                    if charRaw.hasPrefix("@") { charRaw = String(charRaw.dropFirst()) }
+                    // Strip dual dialogue caret
+                    if charRaw.hasSuffix("^") { charRaw = String(charRaw.dropLast()).trimmingCharacters(in: .whitespaces) }
+
+                    let charName = extractCharacterName(charRaw, knownCharacters: knownCharacters)
+                    if !charName.isEmpty {
+                        currentCharacter = charName
+                        inDialogue = true
+                    }
+                    i += 1
+                    continue
+                }
+            }
+
+            // Default: action (stage direction)
+            flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+            inDialogue = false
+            if !trimmed.isEmpty {
+                currentScene.entries.append(ScriptEntry(type: .stageDirection, text: trimmed))
+            }
+            i += 1
+        }
+
+        // Flush remaining
+        flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+        if sceneStarted {
+            scenes.append(currentScene)
+        }
+        if scenes.isEmpty && !currentScene.entries.isEmpty {
+            scenes.append(currentScene)
+        }
+
+        guard !scenes.isEmpty else { return nil }
+
+        return ScriptDocument(
+            title: config?.title ?? title,
+            author: config?.author ?? author,
+            characters: Array(characters).sorted(),
+            characterDescriptions: [],
+            outline: preambleLines.isEmpty ? nil : preambleLines.joined(separator: " "),
+            preamble: [],
+            scenes: scenes,
+            footnotes: [:]
+        )
+    }
+
+    // MARK: - Emphasis stripping
+
+    /// Strip emphasis markers from text: *italic*, **bold**, ***bold-italic***, _underline_.
+    static func stripEmphasis(_ text: String) -> String {
+        var result = text
+        // Order matters: strip *** before ** before *
+        let patterns: [(String, String)] = [
+            (#"\*\*\*(.+?)\*\*\*"#, "$1"),   // ***bold-italic***
+            (#"\*\*(.+?)\*\*"#, "$1"),         // **bold**
+            (#"\*(.+?)\*"#, "$1"),             // *italic*
+            (#"_(.+?)_"#, "$1"),               // _underline_
+        ]
+        for (pattern, template) in patterns {
+            if let regex = try? NSRegularExpression(pattern: pattern) {
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: template)
+            }
+        }
+        return result
     }
 
     // MARK: - Character name extraction
