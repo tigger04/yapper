@@ -88,7 +88,7 @@ narrator-voice: bf_lily            # voice for stage directions
 intro-voice: bf_alice              # voice for preamble (defaults to narrator-voice)
 
 # Content rendering
-read-stage-directions: true        # synthesise stage directions (default: true)
+render-stage-directions: true        # synthesise stage directions (default: true)
 render-intro: true                 # synthesise preamble chapter (default: true)
 render-footnotes: true             # render footnote definitions as narrator asides (default: true)
 
@@ -121,7 +121,7 @@ narrator-voice: bf_alice
 intro-voice: bf_alice
 
 # What to render
-read-stage-directions: true
+render-stage-directions: true
 render-intro: true
 render-footnotes: true
 

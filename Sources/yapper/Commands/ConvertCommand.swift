@@ -860,7 +860,7 @@ struct ConvertCommand: ParsableCommand {
             narratorVoiceName: config?.narratorVoice
         )
 
-        let readStage = config?.readStageDirections ?? true
+        let readStage = config?.renderStageDirections ?? true
         let renderIntro = config?.renderIntro ?? true
         let renderFootnotes = config?.renderFootnotes ?? true
         let knownChars = Set(script.characters)
@@ -975,7 +975,7 @@ struct ConvertCommand: ParsableCommand {
             narratorVoiceName: config?.narratorVoice
         )
 
-        let readStage = config?.readStageDirections ?? true
+        let readStage = config?.renderStageDirections ?? true
         let knownChars = Set(script.characters)
 
         // Configurable gaps (seconds of silence after each entry type)

@@ -170,7 +170,7 @@ run_test "RT-23.11" "auto assignment avoids explicitly assigned voices" test_RT2
 # AC23.5: Stage directions
 # ---------------------------------------------------------------------------
 
-# RT-23.12: With read-stage-directions: true, stage direction text in output.
+# RT-23.12: With render-stage-directions: true, stage direction text in output.
 test_RT23_12() {
     local output
     output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${CONFIG}" --dry-run --non-interactive 2>&1)
@@ -179,7 +179,7 @@ test_RT23_12() {
 }
 run_test "RT-23.12" "stage directions included when enabled" test_RT23_12
 
-# RT-23.13: With read-stage-directions: false, stage direction text absent.
+# RT-23.13: With render-stage-directions: false, stage direction text absent.
 test_RT23_13() {
     local output
     output=$("${YAPPER}" convert "${MD_SCRIPT}" --script-config "${CONFIG_NO_STAGE}" --dry-run --non-interactive 2>&1)
@@ -250,7 +250,7 @@ test_RT23_18() {
     local dir="${SUITE_TMP}/rt2318"
     mkdir -p "${dir}"
     # Config without title/author
-    printf 'auto-assign-voices: true\nread-stage-directions: false\n' > "${dir}/minimal.yaml"
+    printf 'auto-assign-voices: true\nrender-stage-directions: false\n' > "${dir}/minimal.yaml"
     "${YAPPER}" convert "${MD_SCRIPT}" --script-config "${dir}/minimal.yaml" --non-interactive -o "${dir}/play.m4b" --quiet >/dev/null 2>&1
     [[ -f "${dir}/play.m4b" ]] || return 1
     local artist

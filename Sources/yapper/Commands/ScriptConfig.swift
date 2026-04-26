@@ -9,7 +9,7 @@ struct ScriptConfig: Decodable {
     var title: String?
     var author: String?
     var autoAssignVoices: Bool?
-    var readStageDirections: Bool?
+    var renderStageDirections: Bool?
     var narratorVoice: String?
     var characterVoices: [String: String]?
 
@@ -32,7 +32,7 @@ struct ScriptConfig: Decodable {
     enum CodingKeys: String, CodingKey {
         case title, author, threads
         case autoAssignVoices = "auto-assign-voices"
-        case readStageDirections = "read-stage-directions"
+        case renderStageDirections = "render-stage-directions"
         case narratorVoice = "narrator-voice"
         case characterVoices = "character-voices"
         case gapAfterDialogue = "gap-after-dialogue"

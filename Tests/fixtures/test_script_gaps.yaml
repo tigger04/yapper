@@ -1,5 +1,5 @@
 auto-assign-voices: true
-read-stage-directions: true
+render-stage-directions: true
 gap-after-dialogue: 0.5
 gap-after-stage-direction: 0.8
 gap-after-scene: 1.5

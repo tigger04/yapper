@@ -1,7 +1,7 @@
 title: "The Test Play"
 author: "Test Author"
 auto-assign-voices: true
-read-stage-directions: true
+render-stage-directions: true
 render-intro: false
 narrator-voice: bf_lily
 character-voices:

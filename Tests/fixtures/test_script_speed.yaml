@@ -1,4 +1,4 @@
 auto-assign-voices: true
-read-stage-directions: true
+render-stage-directions: true
 dialogue-speed: 0.8
 stage-direction-speed: 1.2

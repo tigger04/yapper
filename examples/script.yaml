@@ -1,7 +1,7 @@
 title: "The Teapot Incident"
 author: "A. N. Onymous"
 auto-assign-voices: true
-read-stage-directions: true
+render-stage-directions: true
 narrator-voice: bf_lily
 character-voices:
   GERALD: bm_george
