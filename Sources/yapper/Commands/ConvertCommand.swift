@@ -608,6 +608,11 @@ struct ConvertCommand: ParsableCommand {
 
     private func resolveFormat(multiChapter: Bool) -> String {
         if let format { return format.lowercased() }
+        // Infer from output extension if specified
+        if let output {
+            let ext = URL(fileURLWithPath: output).pathExtension.lowercased()
+            if ["m4a", "mp3", "m4b"].contains(ext) { return ext }
+        }
         return multiChapter ? "m4b" : "m4a"
     }
 
