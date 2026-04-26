@@ -75,6 +75,20 @@ struct ConvertCommand: ParsableCommand {
             throw ValidationError("No input files specified.")
         }
 
+        // Pre-flight: detect commands that would write then overwrite the same file
+        if inputs.count > 1, let output {
+            let outputExt = URL(fileURLWithPath: output).pathExtension.lowercased()
+            let isAudiobook = (format?.lowercased() == "m4b") || outputExt == "m4b"
+            if !isAudiobook {
+                // Multiple inputs with a single non-M4B output path would overwrite itself
+                throw ValidationError(
+                    "Multiple input files with a single output path '\(output)' would overwrite "
+                    + "the file on each iteration. Use -o with an .m4b extension to combine into "
+                    + "an audiobook, or omit -o to produce one file per input."
+                )
+            }
+        }
+
         // Script mode: detect config file and attempt script parsing
         let hasScriptConfig = scriptConfig != nil || {
             guard inputs.count == 1 else { return false }
