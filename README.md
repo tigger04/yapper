@@ -68,6 +68,21 @@ If `$YAPPER_VOICE` is set to a name that doesn't exist, `yapper speak` exits wit
 
 `yapper speak --dry-run` reports the resolved voice (plus speed and text) without performing synthesis or playing audio. Useful for confirming which voice would be selected, and fast because it skips the 327 MB model load entirely.
 
+### Configuration
+
+Yapper loads YAML config files in a cascade: global (`~/.config/yapper/yapper.yaml`), project (`./yapper.yaml` or `./script.yaml`), and CLI (`--script-config`). Higher-precedence files override individual keys while inheriting the rest.
+
+Use the global config for pronunciation overrides that apply everywhere:
+
+```yaml
+# ~/.config/yapper/yapper.yaml
+speech-substitution:
+  Taḋg: "/taɪɡ/"
+  Cáit: Kawch
+```
+
+Use a project config for script-specific settings (voices, pacing, metadata). See [docs/config.md](docs/config.md) for the full reference.
+
 ## Why
 
 High-quality text-to-speech is an accessibility technology that gives real, meaningful benefit to people with disability. It should be open source, fast, and free from commercial paywalls. Yapper exists to make that a reality on Apple Silicon.
@@ -225,7 +240,8 @@ docs/                   # VISION, architecture, script formats, research notes
 - [Vision](docs/VISION.md) - goals, use cases, and future plans
 - [Architecture](docs/architecture.md) - system design, inference pipeline, build system
 - [Implementation plan](docs/implementation_plan.md) - phased delivery, issue tracking
-- [Script reading](docs/script-reading.md) - multi-voice script conversion, configuration, pacing
+- [Configuration](docs/config.md) - YAML config cascade, all keys, examples
+- [Script reading](docs/script-reading.md) - multi-voice script conversion and pacing
 - [Org-mode format](docs/format-org-mode.md) - org-mode script format specification
 - [Markdown format](docs/format-markdown.md) - markdown script format specification
 - [Fountain format](docs/format-fountain.md) - Fountain screenplay format specification
