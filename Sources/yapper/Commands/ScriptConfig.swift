@@ -13,12 +13,33 @@ struct ScriptConfig: Decodable {
     var narratorVoice: String?
     var characterVoices: [String: String]?
 
+    // Issue #25: concurrent synthesis, gaps, speed
+    var threads: Int?
+    var gapAfterDialogue: Double?
+    var gapAfterStageDirection: Double?
+    var gapAfterScene: Double?
+    var dialogueSpeed: Float?
+    var stageDirectionSpeed: Float?
+
+    // Issue #24: preamble, footnotes
+    var renderIntro: Bool?
+    var introVoice: String?
+    var renderFootnotes: Bool?
+
     enum CodingKeys: String, CodingKey {
-        case title, author
+        case title, author, threads
         case autoAssignVoices = "auto-assign-voices"
         case readStageDirections = "read-stage-directions"
         case narratorVoice = "narrator-voice"
         case characterVoices = "character-voices"
+        case gapAfterDialogue = "gap-after-dialogue"
+        case gapAfterStageDirection = "gap-after-stage-direction"
+        case gapAfterScene = "gap-after-scene"
+        case dialogueSpeed = "dialogue-speed"
+        case stageDirectionSpeed = "stage-direction-speed"
+        case renderIntro = "render-intro"
+        case introVoice = "intro-voice"
+        case renderFootnotes = "render-footnotes"
     }
 
     /// Load config from a YAML file path.

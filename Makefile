@@ -86,8 +86,8 @@ install: build ## Install yapper (and yap shortcut) to ~/.local/bin
 	@# the binary's own argv[0] dispatch routes to the speak subcommand.
 	@# Remove any existing file or symlink at the target paths before writing.
 	@rm -f "$(INSTALL_DIR)/yapper" "$(INSTALL_DIR)/yap"
-	@printf '#!/bin/bash\nexec "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
-	@printf '#!/bin/bash\nexec -a yap "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yap"
+	@printf '#!/bin/bash\nexport LLVM_PROFILE_FILE=/dev/null\nexec "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yapper"
+	@printf '#!/bin/bash\nexport LLVM_PROFILE_FILE=/dev/null\nexec -a yap "%s/yapper" "$$@"\n' "$(PRODDIR)" > "$(INSTALL_DIR)/yap"
 	@chmod +x "$(INSTALL_DIR)/yapper" "$(INSTALL_DIR)/yap"
 	@echo "Installed yapper and yap to $(INSTALL_DIR)"
 

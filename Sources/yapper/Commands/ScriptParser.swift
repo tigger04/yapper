@@ -342,4 +342,40 @@ struct ScriptParser {
         character = nil
         lines.removeAll()
     }
+
+    // MARK: - Stage direction character name Title Case
+
+    /// Replace ALL-CAPS character names in stage direction text with Title Case.
+    ///
+    /// Example: "KEVIN enters the room" → "Kevin enters the room"
+    ///          "GDA CONLON enters behind KEVIN" → "Gda Conlon enters behind Kevin"
+    static func titleCaseCharacterNames(
+        in text: String,
+        knownCharacters: Set<String>
+    ) -> String {
+        var result = text
+        // Sort by length descending so multi-word names are matched first
+        let sorted = knownCharacters.sorted { $0.count > $1.count }
+        for name in sorted {
+            let titleCased = name.split(separator: " ").map { word in
+                let lower = word.lowercased()
+                return lower.prefix(1).uppercased() + lower.dropFirst()
+            }.joined(separator: " ")
+
+            // Replace whole-word occurrences using word boundary regex
+            let escaped = NSRegularExpression.escapedPattern(for: name)
+            if let regex = try? NSRegularExpression(
+                pattern: "\\b\(escaped)\\b",
+                options: []
+            ) {
+                let range = NSRange(result.startIndex..., in: result)
+                result = regex.stringByReplacingMatches(
+                    in: result,
+                    range: range,
+                    withTemplate: titleCased
+                )
+            }
+        }
+        return result
+    }
 }

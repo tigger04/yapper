@@ -51,7 +51,26 @@ struct ConvertCommand: ParsableCommand {
     @Option(name: .long, help: "Path to script.yaml config file for script-reading mode.")
     var scriptConfig: String?
 
+    @Option(name: .long, help: "Number of concurrent synthesis worker processes (default: 3). Use 1 for sequential.")
+    var threads: Int?
+
+    // Hidden worker flags for multi-process synthesis
+    @Option(name: .long, help: .hidden)
+    var workerText: String?
+
+    @Option(name: .long, help: .hidden)
+    var workerVoice: String?
+
+    @Option(name: .long, help: .hidden)
+    var workerOutput: String?
+
     func run() throws {
+        // Worker mode: synthesise a single line and exit
+        if let text = workerText, let voiceName = workerVoice, let outputPath = workerOutput {
+            try runWorker(text: text, voiceName: voiceName, outputPath: outputPath)
+            return
+        }
+
         guard !inputs.isEmpty else {
             throw ValidationError("No input files specified.")
         }
@@ -527,9 +546,14 @@ struct ConvertCommand: ParsableCommand {
 
     // MARK: - Metadata resolution
 
-    private func resolveMetadata(chapters: [Chapter]) -> (author: String?, title: String?) {
-        var resolvedAuthor = author
-        var resolvedTitle = title
+    private func resolveMetadata(
+        chapters: [Chapter],
+        scriptTitle: String? = nil,
+        scriptAuthor: String? = nil
+    ) -> (author: String?, title: String?) {
+        // Precedence: CLI flags > script/config metadata > epub metadata
+        var resolvedAuthor = author ?? scriptAuthor
+        var resolvedTitle = title ?? scriptTitle
 
         // Try extracting from epub
         if resolvedAuthor == nil || resolvedTitle == nil {
@@ -860,8 +884,10 @@ struct ConvertCommand: ParsableCommand {
                     print("    \(char) (\(voiceName)): \(preview)\(entry.text.count > 60 ? "..." : "")")
                 case .stageDirection:
                     if readStage {
-                        let preview = entry.text.prefix(60)
-                        print("    [stage] (\(narrator.name)): \(preview)\(entry.text.count > 60 ? "..." : "")")
+                        let knownChars = Set(script.characters)
+                        let displayText = ScriptParser.titleCaseCharacterNames(in: entry.text, knownCharacters: knownChars)
+                        let preview = displayText.prefix(60)
+                        print("    [stage] (\(narrator.name)): \(preview)\(displayText.count > 60 ? "..." : "")")
                     }
                 }
             }
@@ -874,6 +900,11 @@ struct ConvertCommand: ParsableCommand {
     }
 
     /// Run script mode: synthesise each dialogue turn with the assigned voice.
+    ///
+    /// Uses multi-process concurrent synthesis by default (3 workers). Each
+    /// worker synthesises a single line to a WAV file; the main process trims
+    /// leading/trailing silence, inserts configurable gaps, and assembles the
+    /// scene audio into an M4B.
     private func runScriptMode(engine: YapperEngine, script: ScriptDocument) throws {
         let config = try loadScriptConfig()
         let (charVoices, narrator) = VoiceAssigner.assign(
@@ -884,15 +915,33 @@ struct ConvertCommand: ParsableCommand {
         )
 
         let readStage = config?.readStageDirections ?? true
-        let resolvedTitle = config?.title ?? script.title ?? title
-        let resolvedAuthor = config?.author ?? script.author ?? author
+        let knownChars = Set(script.characters)
+
+        // Configurable gaps (seconds of silence after each entry type)
+        let gapDialogue = config?.gapAfterDialogue ?? 0.3
+        let gapStageDirection = config?.gapAfterStageDirection ?? 0.5
+        let gapScene = config?.gapAfterScene ?? 1.0
+
+        // Configurable per-type speed (multiplied with --speed CLI flag)
+        let dialogueSpeed = (config?.dialogueSpeed ?? 1.0) * speed
+        let stageDirectionSpeed = (config?.stageDirectionSpeed ?? 1.0) * speed
+
+        // Thread count: CLI flag > YAML > default 3
+        let threadCount = threads ?? config?.threads ?? 3
+
+        let resolvedTitle = title ?? config?.title ?? script.title
+        let resolvedAuthor = author ?? config?.author ?? script.author
 
         // Resolve metadata interactively if needed
         let finalTitle: String?
         let finalAuthor: String?
         if !nonInteractive {
             let chapters = script.scenes.map { Chapter(title: $0.title, text: "") }
-            let (a, t) = resolveMetadata(chapters: chapters)
+            let (a, t) = resolveMetadata(
+                chapters: chapters,
+                scriptTitle: resolvedTitle,
+                scriptAuthor: resolvedAuthor
+            )
             finalAuthor = a ?? resolvedAuthor
             finalTitle = t ?? resolvedTitle
         } else {
@@ -917,6 +966,9 @@ struct ConvertCommand: ParsableCommand {
             fputs("Script mode: \(script.title ?? "Untitled")\n", stderr)
             fputs("Cast: \(script.characters.map { "\($0)=\(charVoices[$0]?.name ?? "?")" }.joined(separator: ", "))\n", stderr)
             fputs("Narrator: \(narrator.name)\n", stderr)
+            if threadCount > 1 {
+                fputs("Threads: \(threadCount)\n", stderr)
+            }
         }
 
         let tmpDir = FileManager.default.temporaryDirectory
@@ -926,47 +978,98 @@ struct ConvertCommand: ParsableCommand {
 
         var chapterInfo: [(title: String, aacPath: String, duration: Double)] = []
 
+        // Build work items for all scenes
+        struct WorkItem {
+            let sceneIdx: Int
+            let entryIdx: Int
+            let text: String
+            let voiceName: String
+            let entrySpeed: Float
+            let gap: Double
+            let label: String
+        }
+
         for (sceneIdx, scene) in script.scenes.enumerated() {
             if !quiet {
                 fputs("[\(sceneIdx + 1)/\(script.scenes.count)] \(scene.title)\n", stderr)
             }
 
-            var sceneSamples: [Float] = []
-            let totalEntries = scene.entries.count
-            var reporter = ProgressReporter(totalChunks: totalEntries, quiet: quiet)
-
-            for entry in scene.entries {
-                let voice: Voice
-                let text: String
-
+            var workItems: [WorkItem] = []
+            for (entryIdx, entry) in scene.entries.enumerated() {
                 switch entry.type {
                 case .dialogue(let char):
                     guard let v = charVoices[char] else { continue }
-                    voice = v
-                    text = entry.text
-                    reporter.update(chunkText: "\(char): \(text.prefix(40))")
+                    workItems.append(WorkItem(
+                        sceneIdx: sceneIdx, entryIdx: entryIdx,
+                        text: entry.text, voiceName: v.name,
+                        entrySpeed: dialogueSpeed, gap: gapDialogue,
+                        label: "\(char)"
+                    ))
                 case .stageDirection:
                     guard readStage else { continue }
-                    voice = narrator
-                    text = entry.text
-                    reporter.update(chunkText: "[stage] \(text.prefix(40))")
+                    let titleCasedText = ScriptParser.titleCaseCharacterNames(
+                        in: entry.text, knownCharacters: knownChars
+                    )
+                    workItems.append(WorkItem(
+                        sceneIdx: sceneIdx, entryIdx: entryIdx,
+                        text: titleCasedText, voiceName: narrator.name,
+                        entrySpeed: stageDirectionSpeed, gap: gapStageDirection,
+                        label: "[stage]"
+                    ))
                 }
-
-                let result = try engine.synthesize(text: text, voice: voice, speed: speed)
-                sceneSamples.append(contentsOf: result.samples)
             }
 
-            reporter.finish(summary: "")
+            guard !workItems.isEmpty else { continue }
+
+            // Synthesise all entries (concurrent or sequential)
+            let entryWavDir = tmpDir.appendingPathComponent("scene\(sceneIdx + 1)")
+            try FileManager.default.createDirectory(at: entryWavDir, withIntermediateDirectories: true)
+
+            let synthItems = workItems.map { item in
+                (idx: item.entryIdx, text: item.text, voiceName: item.voiceName, speed: item.entrySpeed)
+            }
+
+            if threadCount > 1 {
+                try synthesiseConcurrentProcesses(
+                    texts: synthItems, wavDir: entryWavDir, threadCount: threadCount
+                )
+            } else {
+                try synthesiseSequentialInProcess(
+                    texts: synthItems, wavDir: entryWavDir, engine: engine
+                )
+            }
+
+            // Assemble scene from trimmed entry WAVs with gaps
+            var sceneSamples: [Float] = []
+            for (i, item) in workItems.enumerated() {
+                let wavPath = entryWavDir.appendingPathComponent("entry_\(String(format: "%03d", item.entryIdx)).wav").path
+                let trimmed = AudioTrimmer.trim(wavPath: wavPath)
+                if !sceneSamples.isEmpty {
+                    let gapSamples = [Float](repeating: 0, count: Int(item.gap * 24000))
+                    sceneSamples.append(contentsOf: gapSamples)
+                }
+                sceneSamples.append(contentsOf: trimmed)
+
+                if !quiet && i % 5 == 0 {
+                    fputs("\r  Assembling: \(i + 1)/\(workItems.count)", stderr)
+                }
+            }
+            if !quiet { fputs("\r  Assembling: \(workItems.count)/\(workItems.count)\n", stderr) }
+
+            // Add scene-end gap (except for last scene)
+            if sceneIdx < script.scenes.count - 1 {
+                let sceneGapSamples = [Float](repeating: 0, count: Int(gapScene * 24000))
+                sceneSamples.append(contentsOf: sceneGapSamples)
+            }
 
             guard !sceneSamples.isEmpty else { continue }
 
-            // Write scene audio to WAV then encode to AAC
-            let wavPath = tmpDir.appendingPathComponent("scene\(sceneIdx + 1).wav")
-            try writeWav(samples: sceneSamples, sampleRate: 24000, to: wavPath)
+            let sceneWavPath = tmpDir.appendingPathComponent("scene\(sceneIdx + 1).wav")
+            try writeWav(samples: sceneSamples, sampleRate: 24000, to: sceneWavPath)
 
             let aacPath = tmpDir.appendingPathComponent("scene\(sceneIdx + 1).aac").path
-            try AudiobookAssembler.encodeAAC(wavPath: wavPath.path, output: aacPath)
-            try? FileManager.default.removeItem(at: wavPath)
+            try AudiobookAssembler.encodeAAC(wavPath: sceneWavPath.path, output: aacPath)
+            try? FileManager.default.removeItem(at: sceneWavPath)
 
             let duration = Double(sceneSamples.count) / 24000.0
             chapterInfo.append((title: scene.title, aacPath: aacPath, duration: duration))
@@ -991,6 +1094,99 @@ struct ConvertCommand: ParsableCommand {
         if !quiet {
             fputs("Created \(outputPath) (\(minutes):\(String(format: "%02d", seconds)))\n", stderr)
         }
+    }
+
+    /// Synthesise work items sequentially in-process (--threads 1).
+    private func synthesiseSequentialInProcess(
+        texts: [(idx: Int, text: String, voiceName: String, speed: Float)],
+        wavDir: URL,
+        engine: YapperEngine
+    ) throws {
+        for item in texts {
+            guard let voice = engine.voiceRegistry.voices.first(where: { $0.name == item.voiceName }) else {
+                continue
+            }
+            let result = try engine.synthesize(text: item.text, voice: voice, speed: item.speed)
+            let wavPath = wavDir.appendingPathComponent("entry_\(String(format: "%03d", item.idx)).wav")
+            try writeWav(samples: result.samples, sampleRate: 24000, to: wavPath)
+        }
+    }
+
+    /// Synthesise work items using multiple concurrent worker processes.
+    private func synthesiseConcurrentProcesses(
+        texts: [(idx: Int, text: String, voiceName: String, speed: Float)],
+        wavDir: URL,
+        threadCount: Int
+    ) throws {
+        let yapperPath = CommandLine.arguments[0]
+        let semaphore = DispatchSemaphore(value: threadCount)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var failures: [String] = []
+
+        for item in texts {
+            semaphore.wait()
+            group.enter()
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                defer {
+                    semaphore.signal()
+                    group.leave()
+                }
+
+                let wavPath = wavDir.appendingPathComponent(
+                    "entry_\(String(format: "%03d", item.idx)).wav"
+                ).path
+
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: yapperPath)
+                process.arguments = [
+                    "convert", "dummy",
+                    "--worker-text", item.text,
+                    "--worker-voice", item.voiceName,
+                    "--worker-output", wavPath,
+                    "--speed", String(item.speed)
+                ]
+                process.standardInput = FileHandle.nullDevice
+                process.standardOutput = FileHandle.nullDevice
+                process.standardError = FileHandle.nullDevice
+
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    if process.terminationStatus != 0 {
+                        lock.lock()
+                        failures.append("Entry \(item.idx): exit code \(process.terminationStatus)")
+                        lock.unlock()
+                    }
+                } catch {
+                    lock.lock()
+                    failures.append("Entry \(item.idx): \(error)")
+                    lock.unlock()
+                }
+            }
+        }
+
+        group.wait()
+
+        if !failures.isEmpty {
+            let failureList = failures.joined(separator: "\n  ")
+            fputs("Worker failures:\n  \(failureList)\n", stderr)
+            throw ValidationError("Script synthesis failed: \(failures.count) worker(s) failed")
+        }
+    }
+
+    /// Worker mode: synthesise a single line and write to WAV.
+    private func runWorker(text: String, voiceName: String, outputPath: String) throws {
+        let engine = try YapperEngine(
+            modelPath: defaultModelPath(),
+            voicesPath: defaultVoicesPath()
+        )
+        guard let voice = engine.voiceRegistry.voices.first(where: { $0.name == voiceName }) else {
+            throw ValidationError("Voice \(voiceName) not found")
+        }
+        let result = try engine.synthesize(text: text, voice: voice, speed: speed)
+        try writeWav(samples: result.samples, sampleRate: 24000, to: URL(fileURLWithPath: outputPath))
     }
 
     /// Load script config from --script-config flag or auto-discover.
