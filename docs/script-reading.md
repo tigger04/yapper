@@ -103,6 +103,41 @@ gap-after-scene: 1.0               # silence at scene boundaries in seconds (def
 threads: 3                         # concurrent synthesis worker processes (default: 3)
 ```
 
+### Example: complete script.yaml
+
+```yaml
+# About Time - script conversion config
+title: "About Time"
+author: "Tadg Paul"
+
+# Cast
+auto-assign-voices: true
+character-voices:
+  KEVIN: am_adam
+  NESSA: af_alloy
+  CAIT: bf_emma
+  BEN: bm_daniel
+narrator-voice: bf_alice
+intro-voice: bf_alice
+
+# What to render
+read-stage-directions: true
+render-intro: true
+render-footnotes: true
+
+# Pacing
+dialogue-speed: 1.0
+stage-direction-speed: 0.9
+gap-after-dialogue: 0.3
+gap-after-stage-direction: 0.5
+gap-after-scene: 1.0
+
+# Performance
+threads: 3
+```
+
+Place this file as `script.yaml` alongside the script file for auto-discovery, or specify it with `--script-config path/to/config.yaml`.
+
 ### CLI flags
 
 | Flag | Purpose |
