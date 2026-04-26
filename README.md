@@ -7,7 +7,7 @@ Fast, Apple Silicon-native text-to-speech powered by [Kokoro-82M](https://huggin
 - **Audiobook generation** - M4B with chapter markers and metadata from epubs, PDFs, markdown, or multiple text files in one command
 - **28 built-in voices** - American and British, male and female, with voice preview and filter shorthands
 - **Concurrent synthesis** - multi-process GPU parallelism for 1.65x faster script conversion
-- **Configurable pacing** - per-type gaps and speech speed for dialogue, stage directions, and scene boundaries, adjustable without re-synthesis
+- **Configurable pacing** - per-type gaps and speech speed for dialogue, stage directions, and scene boundaries
 - **Pronunciation overrides** - inline IPA and bulk substitution via [cascading YAML config](docs/config.md)
 - **Script intelligence** - character name Title Case in stage directions, footnote narrator asides, preamble with cast introduction
 - **Homebrew install** - Developer ID signed, Apple notarised, one command setup
