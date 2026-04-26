@@ -37,7 +37,7 @@ struct VoicesCommand: ParsableCommand {
                 voicesToPreview = engine.voiceRegistry.voices
             } else if let exact = engine.voiceRegistry.voices.first(where: { $0.name == previewSpec }) {
                 voicesToPreview = [exact]
-            } else if let filter = VoiceAssigner.parseFilterPublic(previewSpec) {
+            } else if previewSpec.count <= 3, let filter = VoiceAssigner.parseFilterPublic(previewSpec) {
                 let matched = engine.voiceRegistry.list(filter: filter)
                 if matched.isEmpty {
                     throw ValidationError("No voices match filter '\(previewSpec)'.")
