@@ -1,0 +1,19 @@
+#+TITLE: The Preamble Test
+#+AUTHOR: Test Writer
+
+* Characters
+|-------+-------------------------------|
+| ALICE | A curious girl                |
+| BOB   | Her neighbour, a quiet fellow |
+|-------+-------------------------------|
+
+* Outline
+Two neighbours meet in a garden and discuss the weather.
+
+* ACT I
+** Scene 1: The Garden
+*** A sunny garden. Morning.
+**** ALICE
+Good morning.
+**** BOB
+Is it.

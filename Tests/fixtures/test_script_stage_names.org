@@ -1,0 +1,18 @@
+#+TITLE: Stage Name Test
+#+AUTHOR: Test Author
+
+* Characters
+|-------+------------|
+| KEVIN | A boy      |
+| NESSA | His sister |
+|-------+------------|
+
+* ACT I
+** Scene 1: The Room
+*** KEVIN enters the room and sits down.
+**** KEVIN
+Hello.
+*** NESSA looks at KEVIN and smiles.
+**** NESSA
+Hi there.
+*** GDA CONLON enters behind KEVIN carrying a folder.

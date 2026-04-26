@@ -1,0 +1,4 @@
+auto-assign-voices: true
+read-stage-directions: true
+render-intro: true
+intro-voice: bf_emma

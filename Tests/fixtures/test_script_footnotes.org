@@ -1,0 +1,24 @@
+#+TITLE: Footnote Test
+#+AUTHOR: Test Writer
+
+* Characters
+|-------+--------------|
+| ALICE | A local girl |
+| BOB   | A visitor    |
+|-------+--------------|
+
+* ACT I
+** Scene 1: The Kitchen
+*** A small kitchen. Evening.
+**** ALICE
+Put it in the press[fn:press] over there.
+**** BOB
+The what?
+**** ALICE
+The press. And grab the post[fn:post] while you are at it.
+**** BOB
+You are acting thick[fn:thick].
+
+[fn:press] A press is a type of cupboard or closet, often built into the wall.
+[fn:post] Post is a term used in Ireland to refer to mail or letters.
+[fn:thick] In this context, acting thick means acting stupid or not understanding something.
