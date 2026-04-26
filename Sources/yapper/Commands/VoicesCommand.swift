@@ -21,6 +21,9 @@ struct VoicesCommand: ParsableCommand {
     @Flag(name: .customShort("1"), help: "List voice names only, one per line.")
     var onePerLine: Bool = false
 
+    @Flag(name: .long, help: "Use the full Stella passage for preview (default uses a shorter excerpt).")
+    var full: Bool = false
+
     func run() throws {
         if let previewSpec = preview {
             let engine = try YapperEngine(
@@ -62,8 +65,16 @@ struct VoicesCommand: ParsableCommand {
         }
     }
 
-    /// The standard speech evaluation passage.
-    private static let stellaPassage = "Please call Stella. Ask her to bring these things with her from the store: Six spoons of fresh snow peas, five thick slabs of blue cheese, and maybe a snack for her brother Bob. We also need a small plastic snake and a big toy frog for the kids. She can scoop these things into three red bags, and we will go meet her Wednesday at the train station."
+    /// Short excerpt of the Stella passage (default preview).
+    private static let stellaShort = "Please call Stella. Ask her to bring these things with her from the store: Six spoons of fresh snow peas, five thick slabs of blue cheese, and maybe a snack for her brother Bob."
+
+    /// Full Stella passage (--full flag).
+    private static let stellaFull = "Please call Stella. Ask her to bring these things with her from the store: Six spoons of fresh snow peas, five thick slabs of blue cheese, and maybe a snack for her brother Bob. We also need a small plastic snake and a big toy frog for the kids. She can scoop these things into three red bags, and we will go meet her Wednesday at the train station."
+
+    /// The Stella passage to use, based on --full flag.
+    private var stellaText: String {
+        full ? Self.stellaFull : Self.stellaShort
+    }
 
     /// Resolve what text to speak for preview.
     private func resolvePreviewText() -> String? {
@@ -123,10 +134,10 @@ struct VoicesCommand: ParsableCommand {
         if let custom = customText {
             spokenText = "\(pName) here: \(custom)"
         } else {
-            spokenText = "\(pName) here: \(Self.stellaPassage)"
+            spokenText = "\(pName) here: \(stellaText)"
         }
 
-        fputs("\(voice.name) speaking: \(customText ?? Self.stellaPassage)\n", stderr)
+        fputs("\(voice.name) speaking: \(customText ?? stellaText)\n", stderr)
 
         let result = try engine.synthesize(text: spokenText, voice: voice, speed: 1.0)
 
