@@ -102,9 +102,26 @@ gap-after-dialogue: 0.3            # silence after dialogue lines in seconds (de
 gap-after-stage-direction: 0.5     # silence after stage directions in seconds (default: 0.5)
 gap-after-scene: 1.0               # silence at scene boundaries in seconds (default: 1.0)
 
+# Pronunciation overrides
+speech-substitution:               # text replacements before synthesis
+  Cáit: Kawch                      # plain text replacement
+  Taḋg: "/taɪɡ/"                  # IPA notation (slashes denote IPA)
+
 # Performance
 threads: 3                         # concurrent synthesis worker processes (default: 3)
 ```
+
+### Config cascade
+
+Config files are loaded and merged in order of precedence (later overrides earlier):
+
+1. `~/.config/yapper/yapper.yaml` — global defaults
+2. `./yapper.yaml` or `./script.yaml` in the input file's directory — project overrides
+3. `--script-config path` CLI flag — explicit override
+
+Keys are merged individually. A project config that sets only `speech-substitution` inherits all other keys from the global config. Dictionary keys (`character-voices`, `speech-substitution`) are merged per-entry, with higher-precedence values winning.
+
+This cascade applies to all modes: `speak`, `convert`, and script conversion.
 
 ### Example: complete script.yaml
 
@@ -135,6 +152,12 @@ stage-direction-speed: 0.9
 gap-after-dialogue: 0.3
 gap-after-stage-direction: 0.5
 gap-after-scene: 1.0
+
+# Pronunciation
+speech-substitution:
+  Cáit: Kawch
+  Taḋg: "/taɪɡ/"
+  Gda: Garda
 
 # Performance
 threads: 3

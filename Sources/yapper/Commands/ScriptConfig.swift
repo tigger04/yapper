@@ -59,6 +59,95 @@ struct ScriptConfig: Decodable {
             throw ScriptError.invalidConfig(path: path, message: error.localizedDescription)
         }
     }
+
+    /// Load and merge config from cascading sources.
+    ///
+    /// Precedence (later overrides earlier):
+    /// 1. `~/.config/yapper/yapper.yaml` — global defaults
+    /// 2. `./yapper.yaml` or `./script.yaml` in input file's directory
+    /// 3. `explicitPath` (`--script-config` CLI flag)
+    ///
+    /// Keys are merged individually — a project config that sets only
+    /// `speech-substitution` inherits all other keys from the global config.
+    static func loadMerged(
+        explicitPath: String? = nil,
+        inputDir: String? = nil
+    ) -> ScriptConfig {
+        var merged = ScriptConfig()
+
+        // 1. Global: ~/.config/yapper/yapper.yaml
+        let globalPath = NSHomeDirectory() + "/.config/yapper/yapper.yaml"
+        if FileManager.default.fileExists(atPath: globalPath),
+           let global = try? ScriptConfig.load(from: globalPath) {
+            merged = merge(base: merged, override: global)
+        }
+
+        // 2. Project: ./yapper.yaml or ./script.yaml in input dir
+        if let dir = inputDir {
+            for name in ["yapper.yaml", "script.yaml"] {
+                let path = "\(dir)/\(name)"
+                if FileManager.default.fileExists(atPath: path),
+                   let project = try? ScriptConfig.load(from: path) {
+                    merged = merge(base: merged, override: project)
+                    break
+                }
+            }
+        }
+
+        // 3. Explicit CLI path
+        if let path = explicitPath,
+           let explicit = try? ScriptConfig.load(from: path) {
+            merged = merge(base: merged, override: explicit)
+        }
+
+        return merged
+    }
+
+    /// Merge two configs: non-nil values in `override` replace values in `base`.
+    /// For dictionary fields (characterVoices, speechSubstitution), entries are
+    /// merged key-by-key with override winning per-key.
+    private static func merge(base: ScriptConfig, override: ScriptConfig) -> ScriptConfig {
+        var result = base
+        if let v = override.title { result.title = v }
+        if let v = override.subtitle { result.subtitle = v }
+        if let v = override.author { result.author = v }
+        if let v = override.autoAssignVoices { result.autoAssignVoices = v }
+        if let v = override.renderStageDirections { result.renderStageDirections = v }
+        if let v = override.narratorVoice { result.narratorVoice = v }
+        if let v = override.threads { result.threads = v }
+        if let v = override.gapAfterDialogue { result.gapAfterDialogue = v }
+        if let v = override.gapAfterStageDirection { result.gapAfterStageDirection = v }
+        if let v = override.gapAfterScene { result.gapAfterScene = v }
+        if let v = override.dialogueSpeed { result.dialogueSpeed = v }
+        if let v = override.stageDirectionSpeed { result.stageDirectionSpeed = v }
+        if let v = override.renderIntro { result.renderIntro = v }
+        if let v = override.introVoice { result.introVoice = v }
+        if let v = override.renderFootnotes { result.renderFootnotes = v }
+
+        // Merge dictionaries key-by-key
+        if let overrideVoices = override.characterVoices {
+            var merged = result.characterVoices ?? [:]
+            for (k, v) in overrideVoices { merged[k] = v }
+            result.characterVoices = merged
+        }
+        if let overrideSubs = override.speechSubstitution {
+            var merged = result.speechSubstitution ?? [:]
+            for (k, v) in overrideSubs { merged[k] = v }
+            result.speechSubstitution = merged
+        }
+
+        return result
+    }
+
+    /// Apply speech substitutions to text.
+    static func applySubstitutions(_ text: String, substitutions: [String: String]) -> String {
+        guard !substitutions.isEmpty else { return text }
+        var result = text
+        for (find, replace) in substitutions {
+            result = result.replacingOccurrences(of: find, with: replace)
+        }
+        return result
+    }
 }
 
 enum ScriptError: Error, CustomStringConvertible {

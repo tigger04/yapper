@@ -34,7 +34,12 @@ struct SpeakCommand: ParsableCommand {
     var quiet: Bool = false
 
     func run() throws {
-        let inputText = try resolveInputText()
+        let rawText = try resolveInputText()
+
+        // Load config cascade for substitutions
+        let mergedConfig = ScriptConfig.loadMerged()
+        let substitutions = mergedConfig.speechSubstitution ?? [:]
+        let inputText = ScriptConfig.applySubstitutions(rawText, substitutions: substitutions)
 
         // Dry-run path: load only the voice registry (cheap, no 327MB model weights),
         // resolve the voice, print the resolved parameters, and exit without synthesising.

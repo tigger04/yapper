@@ -120,7 +120,7 @@ run_test "RT-27.4" "project inherits global keys" test_RT27_4
 # AC27.3: CLI config overrides all
 # ---------------------------------------------------------------------------
 
-# RT-27.5: CLI config substitution overrides project config.
+# RT-27.5: CLI config substitution overrides project config (script mode).
 test_RT27_5() {
     local dir="${SUITE_TMP}/rt27_5"
     mkdir -p "${dir}"
@@ -128,31 +128,46 @@ test_RT27_5() {
 speech-substitution:
   cliword: project_version
 YAML
+    # Use a script file so --script-config is valid
+    cat > "${dir}/test.org" <<'ORG'
+#+TITLE: CLI Override Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+The cliword is here.
+ORG
     local cli_config="${SUITE_TMP}/cli.yaml"
     cat > "${cli_config}" <<YAML
 speech-substitution:
   cliword: cli_version
+render-intro: false
 YAML
-    printf 'The cliword is here.' > "${dir}/input.txt"
     local output
-    output=$("${YAPPER}" convert "${dir}/input.txt" --script-config "${cli_config}" --dry-run --non-interactive 2>&1)
+    output=$("${YAPPER}" convert "${dir}/test.org" --script-config "${cli_config}" --dry-run --non-interactive 2>&1)
     printf '%s' "${output}" | grep -qi "cli_version" || return 1
 }
 run_test "RT-27.5" "CLI config overrides project config" test_RT27_5
 
-# RT-27.6: CLI config works when no project or global config exists.
+# RT-27.6: CLI config works when no project or global config exists (script mode).
 test_RT27_6() {
     rm -f "${GLOBAL_CONFIG}"
     local dir="${SUITE_TMP}/rt27_6"
     mkdir -p "${dir}"
+    cat > "${dir}/test.org" <<'ORG'
+#+TITLE: Standalone Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+The standalone word.
+ORG
     local cli_config="${SUITE_TMP}/cli_only.yaml"
     cat > "${cli_config}" <<YAML
 speech-substitution:
   standalone: cli_only_val
+render-intro: false
 YAML
-    printf 'The standalone word.' > "${dir}/input.txt"
     local output
-    output=$("${YAPPER}" convert "${dir}/input.txt" --script-config "${cli_config}" --dry-run --non-interactive 2>&1)
+    output=$("${YAPPER}" convert "${dir}/test.org" --script-config "${cli_config}" --dry-run --non-interactive 2>&1)
     printf '%s' "${output}" | grep -qi "cli_only_val" || return 1
 }
 run_test "RT-27.6" "CLI config works standalone" test_RT27_6
@@ -242,7 +257,7 @@ run_test "RT-27.11" "script-reading.md documents speech-substitution" test_RT27_
 # RT-27.12: Example config in docs includes speech-substitution.
 test_RT27_12() {
     # Check the example config section has a speech-substitution entry
-    grep -A 30 "Example.*script.yaml" "${SCRIPT_DIR}/../../../docs/script-reading.md" | grep -qi "speech-substitution" || return 1
+    grep -A 40 "Example: complete" "${SCRIPT_DIR}/../../../docs/script-reading.md" | grep -qi "speech-substitution" || return 1
 }
 run_test "RT-27.12" "example config includes speech-substitution" test_RT27_12
 
@@ -292,9 +307,10 @@ speech-substitution:
 YAML
     local dir="${SUITE_TMP}/rt27_14"
     mkdir -p "${dir}"
-    cat > "${dir}/yapper.yaml" <<YAML
+    cat > "${dir}/script.yaml" <<YAML
 speech-substitution:
   pword: pval
+render-intro: false
 YAML
     # Create a script fixture to test voice inheritance
     cat > "${dir}/test.org" <<'ORG'
@@ -321,20 +337,28 @@ speech-substitution:
 YAML
     local dir="${SUITE_TMP}/rt27_15"
     mkdir -p "${dir}"
-    cat > "${dir}/yapper.yaml" <<YAML
+    cat > "${dir}/script.yaml" <<YAML
 speech-substitution:
   level: project_level
   projectkey: projectval
+render-intro: false
 YAML
+    cat > "${dir}/test.org" <<'ORG'
+#+TITLE: Cascade Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+level globalkey projectkey clikey
+ORG
     local cli="${SUITE_TMP}/cli15.yaml"
     cat > "${cli}" <<YAML
 speech-substitution:
   level: cli_level
   clikey: clival
+render-intro: false
 YAML
-    printf 'level globalkey projectkey clikey' > "${dir}/input.txt"
     local output
-    output=$("${YAPPER}" convert "${dir}/input.txt" --script-config "${cli}" --dry-run --non-interactive 2>&1)
+    output=$("${YAPPER}" convert "${dir}/test.org" --script-config "${cli}" --dry-run --non-interactive 2>&1)
     # level should be cli_level (highest precedence)
     printf '%s' "${output}" | grep -qi "cli_level" || return 1
     # globalkey inherited from global

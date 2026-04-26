@@ -214,6 +214,11 @@ struct ConvertCommand: ParsableCommand {
         let outputFormat = resolveFormat(multiChapter: true)
         let outputPath = resolveAudiobookOutputPath(format: outputFormat)
 
+        // Load merged config for substitutions
+        let inputDir = inputs.first.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+        let mergedConfig = ScriptConfig.loadMerged(explicitPath: scriptConfig, inputDir: inputDir)
+        let substitutions = mergedConfig.speechSubstitution ?? [:]
+
         // Resolve metadata
         let (resolvedAuthor, resolvedTitle) = resolveMetadata(chapters: chapters)
 
@@ -253,7 +258,8 @@ struct ConvertCommand: ParsableCommand {
             let voice = voices[i]
             fputs("  [\(i + 1)/\(chapters.count)] \(chapter.title) (\(voice.name)) ... ", stderr)
 
-            let result = try engine.synthesize(text: chapter.text, voice: voice, speed: speed)
+            let chapterText = ScriptConfig.applySubstitutions(chapter.text, substitutions: substitutions)
+            let result = try engine.synthesize(text: chapterText, voice: voice, speed: speed)
             let duration = Double(result.samples.count) / Double(result.sampleRate)
 
             // Write WAV
@@ -394,6 +400,11 @@ struct ConvertCommand: ParsableCommand {
             throw ValidationError("Unsupported format '\(fmt)'. Use m4a, mp3, or m4b.")
         }
 
+        // Load merged config for substitutions
+        let inputDir = inputs.first.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+        let mergedConfig = ScriptConfig.loadMerged(explicitPath: scriptConfig, inputDir: inputDir)
+        let substitutions = mergedConfig.speechSubstitution ?? [:]
+
         let selectedVoice = try resolveVoice(engine: engine, voiceName: voice)
 
         // Resolve metadata (prompts interactively if TTY, pre-fills from epub)
@@ -419,7 +430,8 @@ struct ConvertCommand: ParsableCommand {
                     author: resolvedAuthor,
                     title: resolvedTitle,
                     trackNumber: trackNumbers[i],
-                    trackTotal: inputs.count
+                    trackTotal: inputs.count,
+                    substitutions: substitutions
                 )
                 successes.append(input)
             } catch {
@@ -451,7 +463,8 @@ struct ConvertCommand: ParsableCommand {
         author: String? = nil,
         title: String? = nil,
         trackNumber: Int? = nil,
-        trackTotal: Int? = nil
+        trackTotal: Int? = nil,
+        substitutions: [String: String] = [:]
     ) throws {
         guard FileManager.default.fileExists(atPath: input) else {
             throw ValidationError("Input file not found: \(input)")
@@ -466,8 +479,8 @@ struct ConvertCommand: ParsableCommand {
             throw ValidationError("File is empty or whitespace-only: \(input)")
         }
 
-        // Clean text of residual markup from pandoc extraction
-        let cleaned = cleanMarkup(trimmed)
+        // Clean text of residual markup from pandoc extraction, then apply substitutions
+        let cleaned = ScriptConfig.applySubstitutions(cleanMarkup(trimmed), substitutions: substitutions)
 
         let outputPath = resolveOutputPath(for: input, format: format)
         let trackTitle = URL(fileURLWithPath: input).deletingPathExtension().lastPathComponent
@@ -894,6 +907,7 @@ struct ConvertCommand: ParsableCommand {
         let readStage = config?.renderStageDirections ?? true
         let renderIntro = config?.renderIntro ?? true
         let renderFootnotes = config?.renderFootnotes ?? true
+        let dryRunSubs = config?.speechSubstitution ?? [:]
         let knownChars = Set(script.characters)
 
         // Resolve intro voice
@@ -958,6 +972,7 @@ struct ConvertCommand: ParsableCommand {
                         let (stripped, _) = ScriptParser.stripFootnoteReferences(displayText)
                         displayText = stripped
                     }
+                    displayText = ScriptConfig.applySubstitutions(displayText, substitutions: dryRunSubs)
                     let preview = displayText.prefix(60)
                     print("    \(char) (\(voiceName)): \(preview)\(displayText.count > 60 ? "..." : "")")
                 case .stageDirection:
@@ -969,6 +984,7 @@ struct ConvertCommand: ParsableCommand {
                             let (stripped, _) = ScriptParser.stripFootnoteReferences(displayText)
                             displayText = stripped
                         }
+                        displayText = ScriptConfig.applySubstitutions(displayText, substitutions: dryRunSubs)
                         let preview = displayText.prefix(60)
                         print("    [stage] (\(narrator.name)): \(preview)\(displayText.count > 60 ? "..." : "")")
                     }
@@ -1409,16 +1425,20 @@ struct ConvertCommand: ParsableCommand {
 
     /// Load script config from --script-config flag or auto-discover.
     private func loadScriptConfig() throws -> ScriptConfig? {
-        if let configPath = scriptConfig {
-            return try ScriptConfig.load(from: configPath)
+        let inputDir = inputs.first.map { URL(fileURLWithPath: $0).deletingLastPathComponent().path }
+        let merged = ScriptConfig.loadMerged(explicitPath: scriptConfig, inputDir: inputDir)
+        // Return nil if no config was found at any level
+        if merged.title == nil && merged.author == nil && merged.subtitle == nil
+            && merged.characterVoices == nil && merged.narratorVoice == nil
+            && merged.speechSubstitution == nil && merged.autoAssignVoices == nil
+            && merged.renderStageDirections == nil && merged.renderIntro == nil
+            && merged.renderFootnotes == nil && merged.introVoice == nil
+            && merged.threads == nil && merged.dialogueSpeed == nil
+            && merged.stageDirectionSpeed == nil && merged.gapAfterDialogue == nil
+            && merged.gapAfterStageDirection == nil && merged.gapAfterScene == nil {
+            return nil
         }
-        guard inputs.count == 1 else { return nil }
-        let dir = URL(fileURLWithPath: inputs[0]).deletingLastPathComponent().path
-        let autoPath = "\(dir)/script.yaml"
-        if FileManager.default.fileExists(atPath: autoPath) {
-            return try ScriptConfig.load(from: autoPath)
-        }
-        return nil
+        return merged
     }
 
     private func writeWav(samples: [Float], sampleRate: Int, to url: URL) throws {
