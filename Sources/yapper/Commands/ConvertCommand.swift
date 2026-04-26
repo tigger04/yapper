@@ -140,13 +140,25 @@ struct ConvertCommand: ParsableCommand {
             } else {
                 try runSingleFileMode(engine: engine)
             }
-        } else if let format, format.lowercased() == "m4b" {
-            // Multiple inputs + explicit M4B → package as audiobook
-            let chapters = try gatherChapters()
-            try runAudiobookMode(engine: engine, chapters: chapters)
         } else {
-            // Multiple inputs + M4A/MP3 → one file per input, skip failures
-            try runSingleFileMode(engine: engine)
+            // Multiple inputs: check if M4B output is intended
+            let isM4B: Bool
+            if let format {
+                isM4B = format.lowercased() == "m4b"
+            } else if let output, output.lowercased().hasSuffix(".m4b") {
+                isM4B = true
+            } else {
+                isM4B = false
+            }
+
+            if isM4B {
+                // Multiple inputs → package as audiobook with chapters
+                let chapters = try gatherChapters()
+                try runAudiobookMode(engine: engine, chapters: chapters)
+            } else {
+                // Multiple inputs + M4A/MP3 → one file per input, skip failures
+                try runSingleFileMode(engine: engine)
+            }
         }
     }
 
