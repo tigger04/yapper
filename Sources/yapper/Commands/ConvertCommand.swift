@@ -1030,6 +1030,11 @@ struct ConvertCommand: ParsableCommand {
             if threadCount > 1 {
                 fputs("Threads: \(threadCount)\n", stderr)
             }
+            if !substitutions.isEmpty {
+                let preview = substitutions.prefix(5).map { "\($0.key)\u{2192}\($0.value)" }.joined(separator: ", ")
+                let suffix = substitutions.count > 5 ? ", ..." : ""
+                fputs("Substitutions: \(substitutions.count) (\(preview)\(suffix))\n", stderr)
+            }
         }
 
         let tmpDir = FileManager.default.temporaryDirectory
