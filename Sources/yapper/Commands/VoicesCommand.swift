@@ -1,5 +1,5 @@
 // ABOUTME: CLI command to list available voices and preview them.
-// ABOUTME: Displays voice metadata in a formatted table.
+// ABOUTME: Displays voice metadata in a formatted table, or previews with speech.
 
 import ArgumentParser
 import AVFoundation
@@ -12,22 +12,82 @@ struct VoicesCommand: ParsableCommand {
         abstract: "List available voices or preview a voice."
     )
 
-    @Option(name: .long, help: "Preview a voice by speaking a sample sentence.")
+    @Option(name: .long, help: "Preview a voice. Accepts a voice name (bf_emma), filter shorthand (bf), or 'all'. Optional text follows as trailing arguments.")
     var preview: String?
 
+    @Argument(help: "Text to speak. If omitted, uses the standard Stella passage. Use '-' to read from stdin.")
+    var text: [String] = []
+
+    @Flag(name: .customShort("1"), help: "List voice names only, one per line.")
+    var onePerLine: Bool = false
+
     func run() throws {
-        if let previewName = preview {
-            // Preview needs full engine (model loading + synthesis)
+        if let previewSpec = preview {
             let engine = try YapperEngine(
                 modelPath: defaultModelPath(),
                 voicesPath: defaultVoicesPath()
             )
-            try previewVoice(engine: engine, name: previewName)
+
+            // Determine which voices to preview
+            let voicesToPreview: [Voice]
+            if previewSpec.lowercased() == "all" {
+                voicesToPreview = engine.voiceRegistry.voices
+            } else if let exact = engine.voiceRegistry.voices.first(where: { $0.name == previewSpec }) {
+                voicesToPreview = [exact]
+            } else if let filter = VoiceAssigner.parseFilterPublic(previewSpec) {
+                let matched = engine.voiceRegistry.list(filter: filter)
+                if matched.isEmpty {
+                    throw ValidationError("No voices match filter '\(previewSpec)'.")
+                }
+                voicesToPreview = matched
+            } else {
+                let available = engine.voiceRegistry.voices.prefix(5).map(\.name).joined(separator: ", ")
+                throw ValidationError("Voice '\(previewSpec)' not found. Available: \(available)...")
+            }
+
+            // Resolve the text to speak
+            let spokenText = resolvePreviewText()
+
+            for voice in voicesToPreview {
+                try previewVoice(engine: engine, voice: voice, text: spokenText)
+            }
+        } else if onePerLine {
+            let registry = try VoiceRegistry(voicesPath: defaultVoicesPath())
+            for voice in registry.voices {
+                print(voice.name)
+            }
         } else {
-            // Listing only needs the voice registry (no model loading)
             let registry = try VoiceRegistry(voicesPath: defaultVoicesPath())
             listVoices(registry: registry)
         }
+    }
+
+    /// The standard speech evaluation passage.
+    private static let stellaPassage = "Please call Stella. Ask her to bring these things with her from the store: Six spoons of fresh snow peas, five thick slabs of blue cheese, and maybe a snack for her brother Bob. We also need a small plastic snake and a big toy frog for the kids. She can scoop these things into three red bags, and we will go meet her Wednesday at the train station."
+
+    /// Resolve what text to speak for preview.
+    private func resolvePreviewText() -> String? {
+        if text.isEmpty {
+            return nil  // Will use default (Stella passage with voice intro)
+        }
+        if text.count == 1 && text[0] == "-" {
+            // Read from stdin
+            var lines: [String] = []
+            while let line = readLine() {
+                lines.append(line)
+            }
+            return lines.joined(separator: "\n")
+        }
+        return text.joined(separator: " ")
+    }
+
+    /// Format voice name for pronunciation: "bf_emma" → "B.F. Emma"
+    private func pronounceableName(_ voice: Voice) -> String {
+        let parts = voice.name.split(separator: "_")
+        guard parts.count == 2 else { return voice.name }
+        let prefix = parts[0].uppercased().map { String($0) }.joined(separator: ".")
+        let name = parts[1].prefix(1).uppercased() + parts[1].dropFirst()
+        return "\(prefix). \(name)"
     }
 
     private func listVoices(registry: VoiceRegistry) {
@@ -56,14 +116,19 @@ struct VoicesCommand: ParsableCommand {
         print("\n\(voices.count) voices available.")
     }
 
-    private func previewVoice(engine: YapperEngine, name: String) throws {
-        guard let voice = engine.voiceRegistry.voices.first(where: { $0.name == name }) else {
-            let available = engine.voiceRegistry.voices.prefix(5).map(\.name).joined(separator: ", ")
-            throw ValidationError("Voice '\(name)' not found. Available: \(available)...")
+    private func previewVoice(engine: YapperEngine, voice: Voice, text customText: String?) throws {
+        let pName = pronounceableName(voice)
+
+        let spokenText: String
+        if let custom = customText {
+            spokenText = "\(pName) here: \(custom)"
+        } else {
+            spokenText = "\(pName) here: \(Self.stellaPassage)"
         }
 
-        let sampleText = "Hello, this is the \(name) voice."
-        let result = try engine.synthesize(text: sampleText, voice: voice, speed: 1.0)
+        fputs("\(voice.name) speaking: \(customText ?? Self.stellaPassage)\n", stderr)
+
+        let result = try engine.synthesize(text: spokenText, voice: voice, speed: 1.0)
 
         let tmpPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("yapper_preview_\(ProcessInfo.processInfo.processIdentifier).wav")
