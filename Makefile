@@ -53,6 +53,8 @@ test-cli: build ## Run CLI command tests (bash, invokes the built binary)
 	@bash Tests/regression/cli/test_convert_delta.sh
 	@bash Tests/regression/cli/test_progress.sh
 	@bash Tests/regression/cli/test_script.sh
+	@bash Tests/regression/cli/test_concurrent_convert.sh
+	@bash Tests/regression/cli/test_preamble.sh
 	@bash Tests/regression/cli/test_yap.sh
 
 test-one-off: lint ## Run one-off tests (not part of regression)

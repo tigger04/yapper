@@ -946,8 +946,8 @@ struct ConvertCommand: ParsableCommand {
             }
         }
 
-        // Footnotes summary
-        if !script.footnotes.isEmpty {
+        // Footnotes summary (only when rendering is enabled)
+        if renderFootnotes && !script.footnotes.isEmpty {
             print("")
             print("Footnotes: \(script.footnotes.count)")
             for (name, definition) in script.footnotes {

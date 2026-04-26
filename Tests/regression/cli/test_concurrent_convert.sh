@@ -351,10 +351,11 @@ test_RT25_21() {
     local output
     output=$("${YAPPER}" convert "${STAGE_ORG}" --script-config "${CONFIG}" \
         --dry-run --non-interactive 2>&1)
-    if printf '%s' "${output}" | grep -q "GDA CONLON"; then
-        return 1  # Still ALL CAPS
+    # Check stage direction lines only (not Cast list where ALL CAPS is expected)
+    if printf '%s' "${output}" | grep '\[stage\]' | grep -q "GDA CONLON"; then
+        return 1  # Still ALL CAPS in stage direction
     fi
-    printf '%s' "${output}" | grep -qi "Gda Conlon\|gda conlon" || return 1
+    printf '%s' "${output}" | grep '\[stage\]' | grep -qi "Gda Conlon" || return 1
 }
 run_test "RT-25.21" "multi-word character names title-cased" test_RT25_21
 

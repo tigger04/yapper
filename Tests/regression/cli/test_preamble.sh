@@ -80,12 +80,16 @@ test_RT24_4() {
 run_test "RT-24.4" "render-intro: false suppresses preamble" test_RT24_4
 
 # RT-24.5: Omitting render-intro defaults to true.
-# User action: yapper convert preamble.org --script-config default.yaml --dry-run --non-interactive
+# User action: yapper convert preamble.org --script-config (no render-intro key) --dry-run --non-interactive
 # User observes: preamble is rendered (default on).
 test_RT24_5() {
+    # Create a config with no render-intro key
+    local minimal_config="${SUITE_TMP}/minimal.yaml"
+    cat > "${minimal_config}" <<YAML
+auto-assign-voices: true
+YAML
     local output
-    # Use a config that has no render-intro key
-    output=$("${YAPPER}" convert "${PREAMBLE_ORG}" --script-config "${CONFIG_DEFAULT}" \
+    output=$("${YAPPER}" convert "${PREAMBLE_ORG}" --script-config "${minimal_config}" \
         --dry-run --non-interactive 2>&1)
     printf '%s' "${output}" | grep -qi "introduction\|preamble\|curious girl\|outline" || return 1
 }
