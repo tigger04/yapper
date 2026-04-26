@@ -72,11 +72,14 @@ Is it.
 
 Script mode activates when a `script.yaml` file is found alongside the input file, or when `--script-config path/to/config.yaml` is specified.
 
+The `script.yaml` configuration format is shared with [First Folio](https://github.com/tigger04/first-folio), a companion tool that generates formatted PDF output from the same script formats (org-mode, markdown, Fountain). A single `script.yaml` can serve both tools — yapper-specific keys (voices, gaps, speed, threads) are ignored by First Folio, and vice versa.
+
 ### Full configuration reference
 
 ```yaml
 # Metadata (overrides script file metadata)
 title: "My Play"
+subtitle: "A Drama in Two Acts"
 author: "Author Name"
 
 # Voice assignment
@@ -108,6 +111,7 @@ threads: 3                         # concurrent synthesis worker processes (defa
 ```yaml
 # About Time - script conversion config
 title: "About Time"
+subtitle: "A Two-Act Play"
 author: "Tadg Paul"
 
 # Cast

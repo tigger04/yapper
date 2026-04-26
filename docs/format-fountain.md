@@ -37,6 +37,7 @@ Much better out here.
 | Fountain element | Yapper interpretation | ScriptDocument field |
 |---|---|---|
 | Title page `Title:` | Play/screenplay title | `title` |
+| Title page `Subtitle:` | Subtitle | `subtitle` |
 | Title page `Author:` | Author name | `author` |
 | Title page (other keys) | Collected as preamble | `preamble` |
 | Scene heading (`INT.`/`EXT.`/forced `.`) | Scene boundary | `scenes[].title` (becomes M4B chapter) |

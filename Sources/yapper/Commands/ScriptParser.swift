@@ -23,6 +23,7 @@ struct ScriptScene {
 /// The fully parsed script structure.
 struct ScriptDocument {
     var title: String?
+    var subtitle: String?
     var author: String?
     var characters: [String]
     var characterDescriptions: [(name: String, description: String)]
@@ -82,6 +83,7 @@ struct ScriptParser {
         }
 
         var title: String?
+        var subtitle: String?
         var author: String?
         var scenes: [ScriptScene] = []
         var currentScene = ScriptScene(title: "Untitled", entries: [])
@@ -192,6 +194,7 @@ struct ScriptParser {
 
         return ScriptDocument(
             title: config?.title ?? title,
+            subtitle: config?.subtitle ?? subtitle,
             author: config?.author ?? author,
             characters: Array(characters).sorted(),
             characterDescriptions: [],
@@ -212,6 +215,7 @@ struct ScriptParser {
         let lines = content.components(separatedBy: "\n")
 
         var title: String?
+        var subtitle: String?
         var author: String?
         var scenes: [ScriptScene] = []
         var currentScene = ScriptScene(title: "Untitled", entries: [])
@@ -236,6 +240,10 @@ struct ScriptParser {
             // Extract org metadata
             if trimmed.hasPrefix("#+TITLE:") && title == nil {
                 title = String(trimmed.dropFirst(8)).trimmingCharacters(in: .whitespaces)
+                continue
+            }
+            if trimmed.hasPrefix("#+SUBTITLE:") && subtitle == nil {
+                subtitle = String(trimmed.dropFirst(11)).trimmingCharacters(in: .whitespaces)
                 continue
             }
             if trimmed.hasPrefix("#+AUTHOR:") && author == nil {
@@ -356,6 +364,7 @@ struct ScriptParser {
 
         return ScriptDocument(
             title: config?.title ?? title,
+            subtitle: config?.subtitle ?? subtitle,
             author: config?.author ?? author,
             characters: Array(characters).sorted(),
             characterDescriptions: charDescriptions,
@@ -395,6 +404,7 @@ struct ScriptParser {
         let lines = cleaned.components(separatedBy: "\n")
 
         var title: String?
+        var subtitle: String?
         var author: String?
         var preambleLines: [String] = []
         var scenes: [ScriptScene] = []
@@ -511,6 +521,8 @@ struct ScriptParser {
                     switch key {
                     case "title":
                         title = fullValue
+                    case "subtitle":
+                        subtitle = fullValue
                     case "author":
                         author = fullValue
                     default:
@@ -688,6 +700,7 @@ struct ScriptParser {
 
         return ScriptDocument(
             title: config?.title ?? title,
+            subtitle: config?.subtitle ?? subtitle,
             author: config?.author ?? author,
             characters: Array(characters).sorted(),
             characterDescriptions: [],

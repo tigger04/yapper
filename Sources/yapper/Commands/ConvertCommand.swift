@@ -881,6 +881,7 @@ struct ConvertCommand: ParsableCommand {
         }
 
         print("Script mode: \(script.title ?? "Untitled")")
+        if let subtitle = script.subtitle { print("  \(subtitle)") }
         if let author = script.author { print("  Author: \(author)") }
         print("")
         print("Cast:")
@@ -898,6 +899,7 @@ struct ConvertCommand: ParsableCommand {
         if renderIntro {
             print("Introduction:")
             if let title = script.title { print("    \(title)") }
+            if let subtitle = script.subtitle { print("    \(subtitle)") }
             if let author = script.author { print("    by \(author)") }
             for desc in script.characterDescriptions {
                 print("    \(desc.name): \(desc.description)")
@@ -1067,8 +1069,10 @@ struct ConvertCommand: ParsableCommand {
         if renderIntro {
             var preambleText: [String] = []
 
-            // Title and author announcement
+            // Title, subtitle, and author announcement
             if let t = finalTitle { preambleText.append(t) }
+            let resolvedSubtitle = config?.subtitle ?? script.subtitle
+            if let s = resolvedSubtitle { preambleText.append(s) }
             if let a = finalAuthor { preambleText.append("by \(a)") }
 
             // Character descriptions

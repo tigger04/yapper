@@ -7,6 +7,7 @@ import Yams
 /// Configuration for script-reading mode, parsed from a YAML file.
 struct ScriptConfig: Decodable {
     var title: String?
+    var subtitle: String?
     var author: String?
     var autoAssignVoices: Bool?
     var renderStageDirections: Bool?
@@ -30,7 +31,7 @@ struct ScriptConfig: Decodable {
     var speechSubstitution: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case title, author, threads
+        case title, subtitle, author, threads
         case autoAssignVoices = "auto-assign-voices"
         case renderStageDirections = "render-stage-directions"
         case narratorVoice = "narrator-voice"

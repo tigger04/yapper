@@ -8,6 +8,7 @@ This document defines how yapper interprets org-mode (`.org`) files as play/scre
 
 ```org
 #+TITLE: Play Title
+#+SUBTITLE: A Drama in Two Acts
 #+AUTHOR: Author Name
 
 * Characters
@@ -36,7 +37,8 @@ More dialogue.
 |---|---|---|
 | `#+TITLE:` | Play title | `title` |
 | `#+AUTHOR:` | Author name | `author` |
-| `#+SUBTITLE:`, `#+TEMPLATE:`, `#+STARTUP:`, `#+OPTIONS:` | Ignored (org directives) | - |
+| `#+SUBTITLE:` | Subtitle | `subtitle` |
+| `#+TEMPLATE:`, `#+STARTUP:`, `#+OPTIONS:` | Ignored (org directives) | - |
 | `*` (L1 heading) | Act or top-level section marker | Tracked for preamble extraction |
 | `**` (L2 heading) | Scene boundary | `scenes[].title` |
 | `***` (L3 heading) | Stage direction | `scenes[].entries[]` (type: `.stageDirection`) |
@@ -94,7 +96,7 @@ Produces one dialogue entry: `"Once upon a Wednesday meeting: A document that I 
 
 Everything before the first `**` scene heading is considered preamble:
 
-- `#+TITLE:` and `#+AUTHOR:` are extracted as metadata
+- `#+TITLE:`, `#+SUBTITLE:`, and `#+AUTHOR:` are extracted as metadata
 - `*` L1 headings are tracked by name (e.g. "Characters", "Outline")
 - Table rows under "Characters" are parsed as `(name, description)` pairs
 - Text under "Outline" becomes the outline field
