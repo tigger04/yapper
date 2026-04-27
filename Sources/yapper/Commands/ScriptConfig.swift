@@ -140,11 +140,21 @@ struct ScriptConfig: Decodable {
     }
 
     /// Apply speech substitutions to text.
+    /// Apply speech substitutions to text.
+    ///
+    /// If a replacement value is IPA (wrapped in `/slashes/`), it is
+    /// converted to MisakiSwift's inline IPA format: `[original](/phonemes/)`.
+    /// Plain text replacements are applied directly.
     static func applySubstitutions(_ text: String, substitutions: [String: String]) -> String {
         guard !substitutions.isEmpty else { return text }
         var result = text
         for (find, replace) in substitutions {
-            result = result.replacingOccurrences(of: find, with: replace)
+            if replace.count > 2 && replace.hasPrefix("/") && replace.hasSuffix("/") {
+                // IPA value: wrap as [find](/phonemes/) for G2P processing
+                result = result.replacingOccurrences(of: find, with: "[\(find)](\(replace))")
+            } else {
+                result = result.replacingOccurrences(of: find, with: replace)
+            }
         }
         return result
     }

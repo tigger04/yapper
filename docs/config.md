@@ -33,7 +33,11 @@ speech-substitution:
   Gda: Garda                    # regional term expansion
 ```
 
-Applied to all text before synthesis, in all modes. IPA values use `/phonemes/` notation. For inline IPA in source text, use the bracket syntax: `[word](/phonemes/)`.
+Applied to all text before synthesis, in all modes.
+
+**IPA values** are wrapped in `/slashes/`. Yapper automatically converts these to the inline IPA format the G2P engine expects (`[word](/phonemes/)`). Plain text replacements are applied directly.
+
+For inline IPA in source text (without config), use the bracket syntax directly: `[word](/phonemes/)`.
 
 ### Voice assignment (script mode)
 

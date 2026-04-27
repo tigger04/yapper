@@ -248,16 +248,15 @@ run_test "RT-27.10" "dry-run reflects substituted text" test_RT27_10
 # AC27.6: Documentation includes speech-substitution
 # ---------------------------------------------------------------------------
 
-# RT-27.11: script-reading.md includes speech-substitution in config reference.
+# RT-27.11: config.md includes speech-substitution in config reference.
 test_RT27_11() {
-    grep -qi "speech-substitution" "${SCRIPT_DIR}/../../../docs/script-reading.md" || return 1
+    grep -qi "speech-substitution" "${SCRIPT_DIR}/../../../docs/config.md" || return 1
 }
-run_test "RT-27.11" "script-reading.md documents speech-substitution" test_RT27_11
+run_test "RT-27.11" "config.md documents speech-substitution" test_RT27_11
 
 # RT-27.12: Example config in docs includes speech-substitution.
 test_RT27_12() {
-    # Check the example config section has a speech-substitution entry
-    grep -A 40 "Example: complete" "${SCRIPT_DIR}/../../../docs/script-reading.md" | grep -qi "speech-substitution" || return 1
+    grep -A 40 "Example: project" "${SCRIPT_DIR}/../../../docs/config.md" | grep -qi "speech-substitution" || return 1
 }
 run_test "RT-27.12" "example config includes speech-substitution" test_RT27_12
 
