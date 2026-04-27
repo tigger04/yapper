@@ -163,14 +163,14 @@ run_test "RT-4.16" "negative speed produces error" test_RT4_16
 # Specs from: https://github.com/tigger04/yapper/issues/15
 # ---------------------------------------------------------------------------
 
-# RT-15.1: Over 10 invocations with no voice override, at least 3 distinct voices appear.
-# User action: yapper speak --dry-run "test" (10 times)
+# RT-15.1: Over 10 invocations with --random-voice, at least 3 distinct voices appear.
+# User action: yapper speak --random-voice --dry-run "test" (10 times)
 # User observes: different voice names in the output across runs.
 test_RT15_1() {
     local voices=()
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         local v
-        v=$("${YAPPER}" speak --dry-run "test" 2>/dev/null | grep '^voice:' | awk '{print $2}')
+        v=$("${YAPPER}" speak --random-voice --dry-run "test" 2>/dev/null | grep '^voice:' | awk '{print $2}')
         voices+=("${v}")
     done
     local unique
@@ -255,24 +255,15 @@ test_RT15_8() {
 }
 run_test "RT-15.8" "invalid \$YAPPER_VOICE error names the voice and source" test_RT15_8
 
-# RT-15.9: resolveVoice() has no hardcoded voice-name fallback.
-# This is a source-level structural guard. The spec is: "no code path where
-# af_heart is selected without the user asking". Verified by grepping the source.
+# RT-15.9: Default voice without --voice or $YAPPER_VOICE is af_heart.
+# User action: yapper speak --dry-run "test" (no voice override)
+# User observes: voice is af_heart.
 test_RT15_9() {
-    local script_dir
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")"/../../.. && pwd)"
-    local source="${script_dir}/Sources/yapper/Commands/SpeakCommand.swift"
-    [[ -f "${source}" ]] || return 1
-    # Extract the resolveVoice function and check for hardcoded voice names
-    local window
-    window=$(sed -n '/private func resolveVoice/,/^    }/p' "${source}")
-    # Voice-name pattern: quoted string matching [abfejhpz][fm]_[a-z]+
-    if printf '%s' "${window}" | grep -qE '"[abfejhpz][fm]_[a-z]+"'; then
-        return 1  # found a hardcoded voice name
-    fi
-    return 0
+    local v
+    v=$("${YAPPER}" speak --dry-run "test" 2>/dev/null | grep '^voice:' | awk '{print $2}')
+    [[ "${v}" == "af_heart" ]]
 }
-run_test "RT-15.9" "resolveVoice has no hardcoded voice-name fallback" test_RT15_9
+run_test "RT-15.9" "default voice is af_heart" test_RT15_9
 
 # RT-15.10: --dry-run exits 0 and reports a voice: line.
 # User action: yapper speak --dry-run "hello"

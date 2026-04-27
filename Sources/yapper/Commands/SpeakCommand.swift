@@ -21,8 +21,11 @@ struct SpeakCommand: ParsableCommand {
     @Argument(help: "Text to speak. If omitted, reads from stdin.")
     var text: String?
 
-    @Option(name: .long, help: "Voice name (e.g. af_heart, bm_daniel).")
+    @Option(name: .long, help: "Voice name (e.g. af_heart, bm_daniel). Default: af_heart.")
     var voice: String?
+
+    @Flag(name: .long, help: "Use a random voice instead of the default.")
+    var randomVoice: Bool = false
 
     @Option(name: .long, help: "Speech speed multiplier (default: 1.0).")
     var speed: Float = 1.0
@@ -310,8 +313,20 @@ struct SpeakCommand: ParsableCommand {
                 return try lookupVoice(trimmed, in: registry, source: "$YAPPER_VOICE")
             }
         }
-        // 3. Random selection — no hardcoded voice name fallback
-        guard let chosen = registry.randomSystem() else {
+        // 3. --random-voice flag: pick a random voice
+        if randomVoice {
+            guard let chosen = registry.randomSystem() else {
+                throw ValidationError(
+                    "No voices found in the registry at \(registry.voicesPath.path)."
+                )
+            }
+            return chosen
+        }
+        // 4. Default: af_heart (highest fidelity)
+        if let heart = registry.voices.first(where: { $0.name == "af_heart" }) {
+            return heart
+        }
+        guard let chosen = registry.voices.first else {
             throw ValidationError(
                 "No voices found in the registry at \(registry.voicesPath.path)."
             )

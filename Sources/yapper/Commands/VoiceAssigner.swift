@@ -36,10 +36,10 @@ struct VoiceAssigner {
                 narrator = v
             } else {
                 // Fallback if spec matches nothing
-                narrator = registry.voices.last ?? registry.voices[0]
+                narrator = registry.voices.first(where: { $0.name == "af_heart" }) ?? registry.voices[0]
             }
         } else {
-            narrator = registry.voices.last ?? registry.voices[0]
+            narrator = registry.voices.first(where: { $0.name == "af_heart" }) ?? registry.voices[0]
         }
         usedVoiceNames.insert(narrator.name)
 
