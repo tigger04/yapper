@@ -101,7 +101,7 @@ struct ConvertCommand: ParsableCommand {
             if FileManager.default.fileExists(atPath: "\(dir)/yapper.yaml"),
                let config = try? ScriptConfig.load(from: "\(dir)/yapper.yaml"),
                config.characterVoices != nil || config.narratorVoice != nil
-                   || config.renderStageDirections != nil {
+                   || config.render != nil || config.renderStageDirections != nil {
                 return true
             }
             return false
@@ -917,9 +917,9 @@ struct ConvertCommand: ParsableCommand {
             narratorVoiceName: config?.narratorVoice
         )
 
-        let readStage = config?.renderStageDirections ?? true
-        let renderIntro = config?.renderIntro ?? true
-        let renderFootnotes = config?.renderFootnotes ?? true
+        let readStage = config?.resolvedRenderStageDirections ?? true
+        let renderIntro = config?.resolvedRenderFrontmatter ?? true
+        let renderFootnotes = config?.resolvedRenderFootnotes ?? true
         let dryRunSubs = config?.speechSubstitution ?? [:]
         let knownChars = Set(script.characters)
 
@@ -1001,6 +1001,14 @@ struct ConvertCommand: ParsableCommand {
                         let preview = displayText.prefix(60)
                         print("    [stage] (\(narrator.name)): \(preview)\(displayText.count > 60 ? "..." : "")")
                     }
+                case .transition:
+                    let renderTransitions = config?.resolvedRenderTransitions ?? true
+                    if renderTransitions {
+                        var displayText = entry.text
+                        displayText = ScriptConfig.applySubstitutions(displayText, substitutions: dryRunSubs)
+                        let preview = displayText.prefix(60)
+                        print("    [transition] (\(narrator.name)): \(preview)\(displayText.count > 60 ? "..." : "")")
+                    }
                 }
             }
             if scene.entries.count > 5 {
@@ -1037,7 +1045,7 @@ struct ConvertCommand: ParsableCommand {
             narratorVoiceName: config?.narratorVoice
         )
 
-        let readStage = config?.renderStageDirections ?? true
+        let readStage = config?.resolvedRenderStageDirections ?? true
         let knownChars = Set(script.characters)
 
         // Configurable gaps (seconds of silence after each entry type)
@@ -1085,8 +1093,8 @@ struct ConvertCommand: ParsableCommand {
             if !quiet { fputs("Backed up existing \(outputPath) to \(backupPath)\n", stderr) }
         }
 
-        let renderIntro = config?.renderIntro ?? true
-        let renderFootnotes = config?.renderFootnotes ?? true
+        let renderIntro = config?.resolvedRenderFrontmatter ?? true
+        let renderFootnotes = config?.resolvedRenderFootnotes ?? true
         let substitutions = config?.speechSubstitution ?? [:]
 
         if !quiet {
@@ -1263,6 +1271,17 @@ struct ConvertCommand: ParsableCommand {
                             }
                         }
                     }
+
+                case .transition:
+                    let renderTransitions = config?.resolvedRenderTransitions ?? true
+                    guard renderTransitions else { continue }
+                    let transText = applySubs(entry.text)
+                    workItems.append(WorkItem(
+                        sceneIdx: sceneIdx, entryIdx: entryIdx,
+                        text: transText, voiceName: narrator.name,
+                        entrySpeed: stageDirectionSpeed, gap: gapStageDirection,
+                        label: "[transition]"
+                    ))
                 }
             }
 
@@ -1444,11 +1463,12 @@ struct ConvertCommand: ParsableCommand {
         if merged.title == nil && merged.author == nil && merged.subtitle == nil
             && merged.characterVoices == nil && merged.narratorVoice == nil
             && merged.speechSubstitution == nil && merged.autoAssignVoices == nil
-            && merged.renderStageDirections == nil && merged.renderIntro == nil
-            && merged.renderFootnotes == nil && merged.introVoice == nil
-            && merged.threads == nil && merged.dialogueSpeed == nil
-            && merged.stageDirectionSpeed == nil && merged.gapAfterDialogue == nil
-            && merged.gapAfterStageDirection == nil && merged.gapAfterScene == nil {
+            && merged.render == nil && merged.renderStageDirections == nil
+            && merged.renderIntro == nil && merged.renderFootnotes == nil
+            && merged.introVoice == nil && merged.threads == nil
+            && merged.dialogueSpeed == nil && merged.stageDirectionSpeed == nil
+            && merged.gapAfterDialogue == nil && merged.gapAfterStageDirection == nil
+            && merged.gapAfterScene == nil {
             return nil
         }
         return merged

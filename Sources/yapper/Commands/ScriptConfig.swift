@@ -5,14 +5,36 @@ import Foundation
 import Yams
 
 /// Configuration for script-reading mode, parsed from a YAML file.
+/// Nested render configuration — shared schema with First Folio.
+struct RenderConfig: Decodable {
+    var stageDirections: Bool?
+    var frontmatter: Bool?
+    var footnotes: Bool?
+    var characterTable: Bool?
+    var transitions: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case stageDirections = "stage-directions"
+        case frontmatter, footnotes, transitions
+        case characterTable = "character-table"
+    }
+}
+
 struct ScriptConfig: Decodable {
     var title: String?
     var subtitle: String?
     var author: String?
     var autoAssignVoices: Bool?
-    var renderStageDirections: Bool?
     var narratorVoice: String?
     var characterVoices: [String: String]?
+
+    // Render settings (nested block, shared with First Folio)
+    var render: RenderConfig?
+
+    // Legacy flat keys (backwards compatibility)
+    var renderStageDirections: Bool?
+    var renderIntro: Bool?
+    var renderFootnotes: Bool?
 
     // Issue #25: concurrent synthesis, gaps, speed
     var threads: Int?
@@ -22,16 +44,14 @@ struct ScriptConfig: Decodable {
     var dialogueSpeed: Float?
     var stageDirectionSpeed: Float?
 
-    // Issue #24: preamble, footnotes
-    var renderIntro: Bool?
+    // Issue #24: preamble
     var introVoice: String?
-    var renderFootnotes: Bool?
 
     // Pronunciation substitutions: applied to text before synthesis
     var speechSubstitution: [String: String]?
 
     enum CodingKeys: String, CodingKey {
-        case title, subtitle, author, threads
+        case title, subtitle, author, threads, render
         case autoAssignVoices = "auto-assign-voices"
         case renderStageDirections = "render-stage-directions"
         case narratorVoice = "narrator-voice"
@@ -46,6 +66,13 @@ struct ScriptConfig: Decodable {
         case renderFootnotes = "render-footnotes"
         case speechSubstitution = "speech-substitution"
     }
+
+    // Resolved accessors — prefer nested render block, fall back to legacy flat keys
+    var resolvedRenderStageDirections: Bool { render?.stageDirections ?? renderStageDirections ?? true }
+    var resolvedRenderFrontmatter: Bool { render?.frontmatter ?? renderIntro ?? true }
+    var resolvedRenderFootnotes: Bool { render?.footnotes ?? renderFootnotes ?? true }
+    var resolvedRenderCharacterTable: Bool { render?.characterTable ?? true }
+    var resolvedRenderTransitions: Bool { render?.transitions ?? true }
 
     /// Load config from a YAML file path.
     static func load(from path: String) throws -> ScriptConfig {
@@ -112,7 +139,6 @@ struct ScriptConfig: Decodable {
         if let v = override.subtitle { result.subtitle = v }
         if let v = override.author { result.author = v }
         if let v = override.autoAssignVoices { result.autoAssignVoices = v }
-        if let v = override.renderStageDirections { result.renderStageDirections = v }
         if let v = override.narratorVoice { result.narratorVoice = v }
         if let v = override.threads { result.threads = v }
         if let v = override.gapAfterDialogue { result.gapAfterDialogue = v }
@@ -120,9 +146,23 @@ struct ScriptConfig: Decodable {
         if let v = override.gapAfterScene { result.gapAfterScene = v }
         if let v = override.dialogueSpeed { result.dialogueSpeed = v }
         if let v = override.stageDirectionSpeed { result.stageDirectionSpeed = v }
-        if let v = override.renderIntro { result.renderIntro = v }
         if let v = override.introVoice { result.introVoice = v }
+
+        // Legacy flat render keys
+        if let v = override.renderStageDirections { result.renderStageDirections = v }
+        if let v = override.renderIntro { result.renderIntro = v }
         if let v = override.renderFootnotes { result.renderFootnotes = v }
+
+        // Nested render block — merge field by field
+        if let overrideRender = override.render {
+            var merged = result.render ?? RenderConfig()
+            if let v = overrideRender.stageDirections { merged.stageDirections = v }
+            if let v = overrideRender.frontmatter { merged.frontmatter = v }
+            if let v = overrideRender.footnotes { merged.footnotes = v }
+            if let v = overrideRender.characterTable { merged.characterTable = v }
+            if let v = overrideRender.transitions { merged.transitions = v }
+            result.render = merged
+        }
 
         // Merge dictionaries key-by-key
         if let overrideVoices = override.characterVoices {

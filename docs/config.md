@@ -53,9 +53,12 @@ intro-voice: bf_alice            # voice for preamble (defaults to narrator-voic
 ### Content rendering (script mode)
 
 ```yaml
-render-stage-directions: true    # synthesise stage directions (default: true)
-render-intro: true               # synthesise preamble chapter (default: true)
-render-footnotes: true           # render footnote definitions as narrator asides (default: true)
+render:
+  stage-directions: true         # synthesise stage directions (default: true)
+  frontmatter: true              # synthesise preamble chapter (default: true)
+  footnotes: true                # render footnote definitions as narrator asides (default: true)
+  character-table: true          # include character descriptions in preamble (default: true)
+  transitions: true              # render transitions e.g. CUT TO: (default: true)
 ```
 
 ### Pacing (script mode)
@@ -104,9 +107,12 @@ character-voices:
 narrator-voice: bf_alice
 intro-voice: bf_alice
 
-render-stage-directions: true
-render-intro: true
-render-footnotes: true
+render:
+  stage-directions: true
+  frontmatter: true
+  footnotes: true
+  character-table: true
+  transitions: true
 
 dialogue-speed: 1.0
 stage-direction-speed: 0.9

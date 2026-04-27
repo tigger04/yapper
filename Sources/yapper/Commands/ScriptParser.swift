@@ -4,11 +4,12 @@
 import Foundation
 import YapperKit
 
-/// A single entry in a parsed script — either dialogue or a stage direction.
+/// A single entry in a parsed script — dialogue, stage direction, or transition.
 struct ScriptEntry {
     enum EntryType {
         case dialogue(character: String)
         case stageDirection
+        case transition
     }
     let type: EntryType
     let text: String
@@ -160,6 +161,16 @@ struct ScriptParser {
                 continue
             }
 
+            // Transition: blockquote (> ) in script mode
+            if trimmed.hasPrefix("> ") && !inPreambleArea {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                let transText = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                if !transText.isEmpty {
+                    currentScene.entries.append(ScriptEntry(type: .transition, text: transText))
+                }
+                continue
+            }
+
             // Dialogue attribution: **CHARACTER:** or **CHARACTER (notes):**
             if trimmed.hasPrefix("**") {
                 if let endBold = trimmed.range(of: "**", range: trimmed.index(trimmed.startIndex, offsetBy: 2)..<trimmed.endIndex) {
@@ -276,6 +287,16 @@ struct ScriptParser {
                 currentScene = ScriptScene(title: sceneTitle, entries: [])
                 sceneStarted = true
                 inPreambleArea = false
+                continue
+            }
+
+            // Transition: ***** heading (L5)
+            if trimmed.hasPrefix("***** ") {
+                flushDialogue(&currentCharacter, &dialogueLines, &currentScene, &characters)
+                let transText = String(trimmed.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+                if !transText.isEmpty {
+                    currentScene.entries.append(ScriptEntry(type: .transition, text: transText))
+                }
                 continue
             }
 
@@ -644,7 +665,7 @@ struct ScriptParser {
                 inDialogue = false
                 var transText = trimmed
                 if transText.hasPrefix(">") { transText = String(transText.dropFirst()).trimmingCharacters(in: .whitespaces) }
-                currentScene.entries.append(ScriptEntry(type: .stageDirection, text: transText))
+                currentScene.entries.append(ScriptEntry(type: .transition, text: transText))
                 i += 1
                 continue
             }
