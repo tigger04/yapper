@@ -614,4 +614,76 @@ test_RT23_44() {
 }
 run_test "RT-23.44" "single-scene script produces 1 chapter M4B" test_RT23_44
 
+# ---------------------------------------------------------------------------
+# Transitions
+# ---------------------------------------------------------------------------
+
+# RT-23.45: Org-mode L5 heading parsed as transition.
+test_RT23_45() {
+    local script="${SUITE_TMP}/trans.org"
+    cat > "${script}" <<'ORG'
+#+TITLE: Transition Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+Hello.
+***** FADE OUT.
+**** BOB
+Goodbye.
+ORG
+    local output
+    output=$("${YAPPER}" convert "${script}" --script --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "transition.*FADE OUT\|FADE OUT" || return 1
+}
+run_test "RT-23.45" "org-mode L5 heading parsed as transition" test_RT23_45
+
+# RT-23.46: Markdown blockquote parsed as transition.
+test_RT23_46() {
+    local script="${SUITE_TMP}/trans.md"
+    cat > "${script}" <<'MD'
+# Transition Test
+
+### Scene 1: Test
+
+**ALICE:**
+Hello.
+
+> CUT TO:
+
+**BOB:**
+Goodbye.
+MD
+    local output
+    output=$("${YAPPER}" convert "${script}" --script --dry-run --non-interactive 2>&1)
+    printf '%s' "${output}" | grep -qi "transition.*CUT TO\|CUT TO" || return 1
+}
+run_test "RT-23.46" "markdown blockquote parsed as transition" test_RT23_46
+
+# RT-23.47: Transitions excluded when render.transitions is false.
+test_RT23_47() {
+    local dir="${SUITE_TMP}/rt2347"
+    mkdir -p "${dir}"
+    cat > "${dir}/script.yaml" <<'YAML'
+render:
+  transitions: false
+YAML
+    cat > "${dir}/test.org" <<'ORG'
+#+TITLE: No Trans Test
+* ACT I
+** Scene 1: Test
+**** ALICE
+Hello.
+***** FADE OUT.
+**** BOB
+Goodbye.
+ORG
+    local output
+    output=$("${YAPPER}" convert "${dir}/test.org" --dry-run --non-interactive 2>&1)
+    if printf '%s' "${output}" | grep -qi "transition\|FADE OUT"; then
+        return 1
+    fi
+    printf '%s' "${output}" | grep -qi "ALICE\|BOB" || return 1
+}
+run_test "RT-23.47" "transitions excluded when disabled" test_RT23_47
+
 summarise "script reading"
