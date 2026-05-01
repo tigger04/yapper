@@ -20,6 +20,9 @@ yap "Hello, this is yapper."
 # Pin a specific voice
 yap --voice bf_emma "Hello, this is yapper."
 
+# Use a random voice instead of the default
+yap --random-voice "Surprise me."
+
 # Persistent voice via environment variable
 export YAPPER_VOICE=bm_daniel
 yap "Now I sound like Daniel every time."
@@ -39,11 +42,12 @@ yap --dry-run "What voice would this use?"
 
 ### Voice resolution
 
-The voice is resolved from three sources, in order of priority:
+The voice is resolved from these sources, in order of priority:
 
 1. `--voice <name>` - CLI flag, wins unconditionally
 2. `$YAPPER_VOICE` - environment variable for persistent preference
-3. Random - a different voice on every invocation
+3. `--random-voice` - random selection from all installed voices
+4. Default - `af_heart` (highest fidelity voice)
 
 Invalid voice names produce a clear error rather than silently falling back.
 
@@ -163,7 +167,8 @@ Examples: `bf` = British female, `am` = American male, `a` = any American, `f` =
 
 | Flag | Commands | Purpose |
 |------|----------|---------|
-| `--voice <name>` | speak, convert | Specific voice name |
+| `--voice <name>` | speak, convert | Specific voice name (default: af_heart) |
+| `--random-voice` | speak | Use a random voice instead of the default |
 | `--speed <n>` | speak, convert | Speed multiplier (default: 1.0) |
 | `--dry-run` | speak, convert | Preview without synthesis |
 | `-q`, `--quiet` | speak, convert | Suppress progress output |

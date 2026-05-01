@@ -98,12 +98,12 @@ Filter shorthand format: first character = accent (`a` American, `b` British), s
 
 Each character retains a consistent voice throughout the entire script.
 
-## Preamble
+## Preamble (frontmatter)
 
-When `render-intro` is enabled (the default), a preamble chapter is synthesized before the first scene containing:
+When `render.frontmatter` is enabled (the default), a preamble chapter is synthesized before the first scene containing:
 
 1. Title and author announcement
-2. Character descriptions from the character table
+2. Character descriptions from the character table (controlled by `render.character-table`)
 3. Outline text
 
 The preamble uses the `intro-voice` if specified, otherwise falls back to `narrator-voice`.
@@ -116,7 +116,19 @@ Org-mode footnotes (`[fn:name]`) are supported:
 - The footnote definition is read as a narrator aside immediately after the referencing line
 - Useful for glossary notes (e.g. Hiberno-English terms)
 
-Set `render-footnotes: false` to strip markers without reading definitions.
+Set `render.footnotes: false` to strip markers without reading definitions.
+
+## Transitions
+
+Transitions (e.g. "CUT TO:", "FADE OUT.") are rendered using the narrator voice. The syntax varies by format:
+
+| Format | Syntax | Example |
+|--------|--------|---------|
+| Org-mode | L5 heading (`*****`) | `***** FADE OUT.` |
+| Markdown | Blockquote (`> `) | `> CUT TO:` |
+| Fountain | Uppercase line ending in `TO:`, or forced with `>` | `CUT TO:` or `>FADE OUT.` |
+
+Set `render.transitions: false` to exclude transitions from the output.
 
 ## Stage direction character names
 

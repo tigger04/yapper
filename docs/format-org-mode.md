@@ -43,6 +43,7 @@ More dialogue.
 | `**` (L2 heading) | Scene boundary | `scenes[].title` |
 | `***` (L3 heading) | Stage direction | `scenes[].entries[]` (type: `.stageDirection`) |
 | `****` (L4 heading) | Dialogue attribution | `scenes[].entries[]` (type: `.dialogue`) |
+| `*****` (L5 heading) | Transition | `scenes[].entries[]` (type: `.transition`) |
 | Body text below `****` | Dialogue continuation | Appended to current dialogue entry |
 | `\|` table rows | Character descriptions (in preamble) | `characterDescriptions` |
 | `\|---` table separators | Ignored | - |
@@ -59,6 +60,7 @@ More dialogue.
 Dialogue text here.         ← body: dialogue content
 **** CHARACTER (softly)     ← L4: with acting direction in parentheses
 More dialogue.
+***** FADE OUT.             ← L5: transition (narrator voice)
 ```
 
 ## Dialogue attribution

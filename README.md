@@ -32,7 +32,7 @@ yap "Hello, this is yapper."
 yapper convert notes.txt -o notes.m4a
 
 # Convert a play to a multi-voice audiobook
-yapper convert play.org
+yapper convert play.org --script
 
 # Preview all British female voices
 yapper voices --preview bf

@@ -38,6 +38,7 @@ More dialogue.
 | `**CHARACTER:**` | Dialogue attribution | `scenes[].entries[]` (type: `.dialogue`) |
 | `**CHARACTER (notes):**` | Dialogue attribution with acting direction | Character extracted, direction stripped |
 | Body text below attribution | Dialogue continuation | Appended to current dialogue entry |
+| `> text` (blockquote) | Transition | `scenes[].entries[]` (type: `.transition`) |
 | Text before first `###` | Preamble content | `preamble` |
 | `[^name]` in text | Footnote reference (stripped) | Triggers footnote aside |
 | `[^name]: definition` | Footnote definition | `footnotes[name]` |
