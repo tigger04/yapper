@@ -1,0 +1,34 @@
+#+TITLE: About Time
+#+SUBTITLE: Working Title
+#+DATE: 2026-04-27
+#+VERSION: Draft 0.1
+#+AUTHOR: Taḋg Paul
+#+STARTUP: showeverything
+#+OPTIONS: toc:nil
+
+* Characters
+| Bob    | A stereotype       |
+| Alice  | Another stereotype |
+| Foobar | Hero of the story  |
+|--------+--------------------|
+
+* Outline
+Nothing much happens
+
+* Act I
+** Scene 1: The Test
+*** Everyone is just standing around
+**** Bob
+Hi there Alice
+**** Alice
+Hi Bob!
+**** Bob
+Have you seen foobar?
+**** Foobar
+Did someone say my name?
+**** Alice
+He heard us!
+**** Bob
+Quick! Hide!
+**** Alice
+Let's hide under the table, he won't see us there.
