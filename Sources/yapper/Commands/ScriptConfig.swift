@@ -104,27 +104,39 @@ struct ScriptConfig: Decodable {
 
         // 1. Global: ~/.config/yapper/yapper.yaml
         let globalPath = NSHomeDirectory() + "/.config/yapper/yapper.yaml"
-        if FileManager.default.fileExists(atPath: globalPath),
-           let global = try? ScriptConfig.load(from: globalPath) {
-            merged = merge(base: merged, override: global)
+        if FileManager.default.fileExists(atPath: globalPath) {
+            do {
+                let global = try ScriptConfig.load(from: globalPath)
+                merged = merge(base: merged, override: global)
+            } catch {
+                fputs("Warning: failed to parse global config \(globalPath): \(error)\n", stderr)
+            }
         }
 
         // 2. Project: ./yapper.yaml or ./script.yaml in input dir
         if let dir = inputDir {
             for name in ["yapper.yaml", "script.yaml"] {
                 let path = "\(dir)/\(name)"
-                if FileManager.default.fileExists(atPath: path),
-                   let project = try? ScriptConfig.load(from: path) {
-                    merged = merge(base: merged, override: project)
+                if FileManager.default.fileExists(atPath: path) {
+                    do {
+                        let project = try ScriptConfig.load(from: path)
+                        merged = merge(base: merged, override: project)
+                    } catch {
+                        fputs("Warning: failed to parse config \(path): \(error)\n", stderr)
+                    }
                     break
                 }
             }
         }
 
         // 3. Explicit CLI path
-        if let path = explicitPath,
-           let explicit = try? ScriptConfig.load(from: path) {
-            merged = merge(base: merged, override: explicit)
+        if let path = explicitPath {
+            do {
+                let explicit = try ScriptConfig.load(from: path)
+                merged = merge(base: merged, override: explicit)
+            } catch {
+                fputs("Warning: failed to parse config \(path): \(error)\n", stderr)
+            }
         }
 
         return merged
